@@ -442,3 +442,45 @@ async def test_finalize_refuses_three_pages(jobs_dir, reviewable, monkeypatch):
         from textual.widgets import Button
         assert app.screen.query_one("#yes", Button).disabled
     assert not reviewable.submitted_pdf.exists()
+
+
+async def test_finalize_rolls_back_on_tracker_error(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render, tracker
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+
+    def fail(path, row):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(tracker, "insert", fail)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#yes")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "FinalizeScreen"
+        from textual.widgets import Button
+        assert not app.screen.query_one("#yes", Button).disabled
+    assert not reviewable.submitted_pdf.exists()
+    assert application.load(reviewable).submitted_date is None
+    assert tracker.read(paths.tracker_md(jobs_dir)) == []
+
+
+async def test_finalize_double_click_records_once(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render, tracker
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        from textual.widgets import Button
+        at = app.screen.query_one("#yes", Button).region.center
+        await pilot.click(offset=at)
+        await pilot.click(offset=at)
+        await pilot.pause()
+    assert len(tracker.read(paths.tracker_md(jobs_dir))) == 1
+    assert reviewable.submitted_pdf.read_bytes() == b"%PDF-1.4 fake"

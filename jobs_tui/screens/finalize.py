@@ -1,4 +1,5 @@
 import shutil
+from contextlib import suppress
 from datetime import date
 
 from rich.markup import escape
@@ -48,11 +49,33 @@ class FinalizeScreen(ModalScreen[bool]):
         if event.button.id != "yes":
             self.dismiss(False)
             return
-        shutil.copy(self.p.resume_pdf, self.p.submitted_pdf)
-        meta = application.load(self.p)
-        meta.submitted_date = date.today().isoformat()
-        application.save(self.p, meta)
-        folder = str(self.p.root.relative_to(self.app.jobs)) + "/"
-        tracker.insert(tracker_md(self.app.jobs), tracker.Row(meta.submitted_date, meta.company, meta.role, folder, meta.url or "", ""))
+        yes, no = self.query_one("#yes", Button), self.query_one("#no", Button)
+        yes.disabled = no.disabled = True
+        if self.p.submitted_pdf.exists():
+            self.app.notify("This application was already finalized.")
+            self.dismiss(False)
+            return
+        copied = False
+        meta = None
+        try:
+            meta = application.load(self.p)
+            previous = meta.submitted_date
+            shutil.copy(self.p.resume_pdf, self.p.submitted_pdf)
+            copied = True
+            meta.submitted_date = date.today().isoformat()
+            application.save(self.p, meta)
+            folder = str(self.p.root.relative_to(self.app.jobs)) + "/"
+            tracker.insert(tracker_md(self.app.jobs), tracker.Row(meta.submitted_date, meta.company, meta.role, folder, meta.url or "", ""))
+        except Exception as err:
+            if copied:
+                self.p.submitted_pdf.unlink(missing_ok=True)
+                meta.submitted_date = previous
+                with suppress(Exception):
+                    application.save(self.p, meta)
+            message = escape(f"Finalize failed: {err}")
+            self.query_one("#finalize-info", Static).update(message)
+            self.app.notify(message, severity="error")
+            yes.disabled = no.disabled = False
+            return
         self.app.notify("Recorded in tracker.md")
         self.dismiss(True)
