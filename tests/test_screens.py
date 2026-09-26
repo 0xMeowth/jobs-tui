@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from jobs_tui import application, paths
@@ -199,8 +201,120 @@ async def test_brief_writes_request_and_sends(jobs_dir, two_apps, monkeypatch):
         app.screen.query_one("#brief", TextArea).text = "Focus on analytics leadership."
         await pilot.click("#start")
         await pilot.pause()
+        await app.workers.wait_for_complete()
     a = app.current
     req = a.review_request.read_text()
     assert "Focus on analytics leadership." in req and "jd.md" in req and "proposed-edits.json" in req
     assert sent and sent[0][0] == "wK:p1" and str(a.root) in sent[0][1]
     assert app.bridge.pane_id == "wK:p1"
+
+
+SAMPLE_EDITS = {"edits": [
+    {"id": "e1", "path": "acme.b1.text", "current": "Built a churn model", "proposed": "Built and deployed a churn model", "reason": "deployment"},
+    {"id": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting", "proposed": "Automated reporting", "reason": "shorter"},
+]}
+
+
+@pytest.fixture
+def reviewable(jobs_dir):
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps(SAMPLE_EDITS))
+    return p
+
+
+async def test_review_accept_writes_yaml_and_feedback(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        from jobs_tui.model import Resume
+        from jobs_tui.edits import load_feedback
+        assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
+        assert load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
+        assert app.pages == 2
+        await pilot.press("r")
+        await pilot.pause()
+        assert load_feedback(reviewable.review_feedback)["e2"].status == "rejected"
+
+
+async def test_review_comment_and_send_feedback(jobs_dir, reviewable, monkeypatch):
+    sent = []
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, force=False: sent.append(text) or "sent")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        from textual.widgets import TextArea
+        app.screen.query_one("#comment", TextArea).text = "Overstates deployment."
+        await pilot.click("#ok")
+        await pilot.pause()
+        from jobs_tui.edits import load_feedback
+        d = load_feedback(reviewable.review_feedback)["e1"]
+        assert d.status == "needs_revision" and d.feedback == "Overstates deployment."
+        await pilot.press("s")
+        await pilot.pause()
+    assert sent and "review-feedback.json" in sent[0]
+
+
+async def test_review_inline_edit_uses_final_text(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        from textual.widgets import TextArea
+        app.screen.query_one("#edit-text", TextArea).text = "My own wording"
+        await pilot.click("#ok")
+        await pilot.pause(0.3)
+        from jobs_tui.model import Resume
+        assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "My own wording"
+
+
+async def test_review_reloads_when_agent_rewrites_edits(jobs_dir, reviewable):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+        from textual.widgets import ListView
+        assert len(app.screen.query_one("#edit-list", ListView).children) == 2
+        more = dict(SAMPLE_EDITS); more["edits"] = SAMPLE_EDITS["edits"] + [{"id": "e3", "path": "globex.b1.text", "current": "x", "proposed": "y", "reason": "z"}]
+        reviewable.proposed_edits.write_text(json.dumps(more))
+        for _ in range(30):
+            await pilot.pause(0.1)
+            if len(app.screen.query_one("#edit-list", ListView).children) == 3:
+                break
+        assert len(app.screen.query_one("#edit-list", ListView).children) == 3
+
+
+async def test_review_survives_partial_write(jobs_dir, reviewable):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause(0.5)
+        from textual.widgets import ListView
+        reviewable.proposed_edits.write_text('{"edits": [{"id": "e1", "pa')
+        await pilot.pause(1.0)
+        assert len(app.screen.query_one("#edit-list", ListView).children) == 2
+        more = {"edits": SAMPLE_EDITS["edits"] + [{"id": "e3", "path": "globex.b1.text", "current": "x", "proposed": "y", "reason": "z"}]}
+        reviewable.proposed_edits.write_text(json.dumps(more))
+        for _ in range(30):
+            await pilot.pause(0.1)
+            if len(app.screen.query_one("#edit-list", ListView).children) == 3:
+                break
+        assert len(app.screen.query_one("#edit-list", ListView).children) == 3
+        assert app.is_running

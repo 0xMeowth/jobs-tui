@@ -24,7 +24,7 @@ class ApplicationsScreen(Screen):
     ]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter open · t tracker · y edit yaml · : agent · q quit", classes="help")
+        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter open · b brief · t tracker · y edit yaml · : agent · q quit", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="app-list")
             yield Static("No applications yet. Press n.", id="app-detail")
@@ -104,7 +104,8 @@ class ApplicationsScreen(Screen):
 
     def action_open_app(self) -> None:
         if self.app.current:
-            self.app.notify("Review: built in Task 13")
+            from jobs_tui.screens.review import ReviewScreen
+            self.app.push_screen(ReviewScreen(self.app.current))
 
     def action_brief(self) -> None:
         if self.app.current:
