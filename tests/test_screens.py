@@ -179,3 +179,28 @@ async def test_cancel_during_url_fetch_returns_to_list(jobs_dir, monkeypatch):
         await pilot.pause(0.3)
         assert app.is_running
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
+async def test_brief_writes_request_and_sends(jobs_dir, two_apps, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    monkeypatch.setenv("HERDR_ENV", "1")
+    monkeypatch.setattr(bridge_mod.shutil, "which", lambda n: "/x/herdr")
+    pane = bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "t")
+    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
+    monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane if pid == "wK:p1" else None)
+    sent = []
+    monkeypatch.setattr(bridge_mod, "run_in_pane", lambda pid, text: sent.append((pid, text)))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        from textual.widgets import TextArea
+        app.screen.query_one("#brief", TextArea).text = "Focus on analytics leadership."
+        await pilot.click("#start")
+        await pilot.pause()
+    a = app.current
+    req = a.review_request.read_text()
+    assert "Focus on analytics leadership." in req and "jd.md" in req and "proposed-edits.json" in req
+    assert sent and sent[0][0] == "wK:p1" and str(a.root) in sent[0][1]
+    assert app.bridge.pane_id == "wK:p1"

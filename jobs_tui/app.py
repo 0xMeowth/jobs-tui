@@ -1,3 +1,4 @@
+from functools import partial
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -7,7 +8,7 @@ from textual.events import Key
 from textual.widget import Widget
 from textual.widgets import Input, Static
 
-from jobs_tui.bridge import Bridge, free_text_prompt
+from jobs_tui.bridge import Bridge, Pane, free_text_prompt
 from jobs_tui.paths import AppPaths
 
 
@@ -21,8 +22,17 @@ class CommandBar(Widget):
         self.set_interval(5, self.refresh_status)
 
     def refresh_status(self) -> None:
+        self.run_worker(self._fetch_status, thread=True, exclusive=True, group="status")
+
+    def _fetch_status(self) -> None:
         app: JobsApp = self.app  # type: ignore[assignment]
         pane = app.bridge.pane()
+        app.call_from_thread(self._show_status, pane)
+
+    def _show_status(self, pane: Pane | None) -> None:
+        if not self.is_mounted:
+            return
+        app: JobsApp = self.app  # type: ignore[assignment]
         agent = f"{pane.agent} {pane.pane_id} {pane.status}" if pane else "no agent pane (copies to clipboard)"
         pages = f" · {app.pages} pages" if app.pages is not None else ""
         self.query_one("#agent-status", Static).update(agent + pages)
@@ -62,15 +72,20 @@ class JobsApp(App):
         except NoMatches:
             return
 
-    def send_to_agent(self, text: str, force: bool = False) -> str:
+    def send_to_agent(self, text: str, force: bool = False) -> None:
+        self.run_worker(partial(self._deliver, text, force), thread=True, group="deliver")
+
+    def _deliver(self, text: str, force: bool) -> None:
         outcome = self.bridge.deliver(text, force=force)
+        self.call_from_thread(self._notify_outcome, outcome)
+
+    def _notify_outcome(self, outcome: str) -> None:
         messages = {
             "sent": "Sent to agent pane",
             "busy": "Agent pane is working. Press again to force, or wait.",
             "copied": "No agent pane. Prompt copied to clipboard.",
         }
         self.notify(messages[outcome], severity="warning" if outcome != "sent" else "information")
-        return outcome
 
     def set_pages(self, n: int | None) -> None:
         self.pages = n

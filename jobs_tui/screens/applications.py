@@ -17,6 +17,7 @@ class ApplicationsScreen(Screen):
     BINDINGS = [
         Binding("n", "new_app", "New"),
         Binding("enter", "open_app", "Open", priority=True),
+        Binding("b", "brief", "Brief"),
         Binding("t", "tracker", "Tracker"),
         Binding("y", "edit_yaml", "Edit YAML"),
         Binding("q", "app.quit", "Quit"),
@@ -104,6 +105,11 @@ class ApplicationsScreen(Screen):
     def action_open_app(self) -> None:
         if self.app.current:
             self.app.notify("Review: built in Task 13")
+
+    def action_brief(self) -> None:
+        if self.app.current:
+            from jobs_tui.screens.brief import BriefScreen
+            self.app.push_screen(BriefScreen(self.app.current), lambda _: self.call_later(self.refresh_list))
 
     def action_tracker(self) -> None:
         self.app.notify("Tracker: built in Task 16")
