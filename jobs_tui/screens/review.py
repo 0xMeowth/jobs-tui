@@ -260,7 +260,8 @@ class ReviewScreen(Screen):
         self.app.send_to_agent(bridge.feedback_prompt(self.p.root))
 
     def action_render(self) -> None:
-        self.app.notify("Render screen: built in Task 14")
+        from jobs_tui.screens.render_screen import RenderScreen
+        self.app.push_screen(RenderScreen(self.p))
 
     def action_back(self) -> None:
         self.app.pop_screen()

@@ -358,3 +358,25 @@ async def test_review_shows_markup_literally(jobs_dir):
         from textual.widgets import Static
         assert text in app.screen.query_one("#edit-detail", Static).render().plain
         assert app.is_running
+
+
+async def test_render_screen_shows_pages_and_autofit(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 3, [], {}))
+    monkeypatch.setattr(render, "autofit", lambda jobs, p: render.RenderResult(p.resume_pdf, 2, [], render.LADDER[1]))
+    sent = []
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, force=False: sent.append(text) or "sent")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause(0.3)
+        from textual.widgets import Static
+        info = app.screen.query_one("#render-info", Static)
+        assert "3" in str(info.content) and "limit 2" in str(info.content)
+        await pilot.press("f")
+        await pilot.pause(0.3)
+        assert "0.6em" in str(info.content) and app.pages == 2
+        await pilot.press("t")
+        await pilot.pause()
+    assert sent and "must fit 2" in sent[0]

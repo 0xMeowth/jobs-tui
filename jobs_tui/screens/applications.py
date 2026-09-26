@@ -18,13 +18,14 @@ class ApplicationsScreen(Screen):
         Binding("n", "new_app", "New"),
         Binding("enter", "open_app", "Open", priority=True),
         Binding("b", "brief", "Brief"),
+        Binding("r", "render", "Render"),
         Binding("t", "tracker", "Tracker"),
         Binding("y", "edit_yaml", "Edit YAML"),
         Binding("q", "app.quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter open · b brief · t tracker · y edit yaml · : agent · q quit", classes="help")
+        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter open · b brief · r render · t tracker · y edit yaml · : agent · q quit", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="app-list")
             yield Static("No applications yet. Press n.", id="app-detail")
@@ -111,6 +112,11 @@ class ApplicationsScreen(Screen):
         if self.app.current:
             from jobs_tui.screens.brief import BriefScreen
             self.app.push_screen(BriefScreen(self.app.current), lambda _: self.call_later(self.refresh_list))
+
+    def action_render(self) -> None:
+        if self.app.current:
+            from jobs_tui.screens.render_screen import RenderScreen
+            self.app.push_screen(RenderScreen(self.app.current))
 
     def action_tracker(self) -> None:
         self.app.notify("Tracker: built in Task 16")
