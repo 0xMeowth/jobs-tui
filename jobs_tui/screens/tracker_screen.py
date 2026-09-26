@@ -21,7 +21,8 @@ class TrackerScreen(Screen):
     def on_mount(self) -> None:
         table = self.query_one("#tracker-table", DataTable)
         table.add_columns("Submitted", "Company", "Role", "Folder", "URL", "Notes")
-        for r in tracker.read(tracker_md(self.app.jobs)):
+        self.rows = tracker.read(tracker_md(self.app.jobs))
+        for i, r in enumerate(self.rows):
             table.add_row(
                 escape(r.submitted),
                 escape(r.company),
@@ -29,12 +30,12 @@ class TrackerScreen(Screen):
                 escape(r.folder),
                 escape(r.url),
                 escape(r.notes),
-                key=r.folder,
+                key=str(i),
             )
         table.focus()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        folder = str(event.row_key.value).rstrip("/")
+        folder = self.rows[int(event.row_key.value)].folder.rstrip("/")
         from jobs_tui.screens.review import ReviewScreen
         self.app.push_screen(ReviewScreen(AppPaths(self.app.jobs / folder)))
 
