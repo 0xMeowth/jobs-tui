@@ -191,9 +191,14 @@ class ReviewScreen(Screen):
         E.save_feedback(self.p.review_feedback, self.decisions)
         self.call_later(self.reload)
 
-    def apply(self, e: E.Edit, final: str | None, render: bool = True) -> None:
+    def accepted(self, e: E.Edit) -> bool:
         if E.status_of(e.id, self.decisions) == "accepted":
             self.app.notify("Already accepted")
+            return True
+        return False
+
+    def apply(self, e: E.Edit, final: str | None, render: bool = True) -> None:
+        if self.accepted(e):
             return
         try:
             resume = Resume.load(self.p.resume_yaml)
@@ -226,21 +231,18 @@ class ReviewScreen(Screen):
             self.action_next()
 
     def action_reject(self) -> None:
-        if e := self.current():
+        if (e := self.current()) and not self.accepted(e):
             self.decide(e, "rejected")
             self.action_next()
 
     def action_edit(self) -> None:
         e = self.current()
-        if not e or e.op == "remove":
-            return
-        if E.status_of(e.id, self.decisions) == "accepted":
-            self.app.notify("Already accepted")
+        if not e or e.op == "remove" or self.accepted(e):
             return
         self.app.push_screen(EditTextScreen(e.proposed), lambda text: text is not None and self.apply(e, text))
 
     def action_comment(self) -> None:
-        if e := self.current():
+        if (e := self.current()) and not self.accepted(e):
             prev = self.decisions.get(e.id, E.Decision()).feedback
             self.app.push_screen(CommentScreen(prev), lambda text: text is not None and self.decide(e, "needs_revision", feedback=text))
 

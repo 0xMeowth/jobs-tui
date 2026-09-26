@@ -1052,3 +1052,28 @@ async def test_picking_pane_returns_focus_to_list(jobs_dir, two_apps, monkeypatc
         await pilot.pause()
         assert app.bridge.pane_id == "wK:p1"
         assert app.screen.query_one("#app-list", ListView).has_focus
+
+
+async def test_reject_and_comment_refuse_accepted_edit(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import load_feedback
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        await pilot.press("up")
+        await pilot.pause()
+        await pilot.press("x")
+        await pilot.pause()
+        assert load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
+        await pilot.press("c")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        assert load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
+    assert notices.count("Already accepted") == 2
