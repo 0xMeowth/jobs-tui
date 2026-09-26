@@ -160,6 +160,11 @@ class JobsApp(App):
     def action_focus_pair(self) -> None:
         self._enter_bar("#agent-pane")
 
+    def pop_to_list(self) -> None:
+        from jobs_tui.screens.applications import ApplicationsScreen
+        while len(self.screen_stack) > 1 and not isinstance(self.screen, ApplicationsScreen):
+            self.pop_screen()
+
     def send_to_agent(self, text: str, force: bool = False, on_busy: Callable[[], None] | None = None) -> None:
         force = force or (text == self._busy_text)
         self.run_worker(partial(self._deliver, text, force, on_busy), thread=True, group="deliver")

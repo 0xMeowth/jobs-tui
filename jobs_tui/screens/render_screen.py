@@ -90,7 +90,7 @@ class RenderScreen(Screen):
 
     def action_finalize(self) -> None:
         from jobs_tui.screens.finalize import FinalizeScreen
-        self.app.push_screen(FinalizeScreen(self.p))
+        self.app.push_screen(FinalizeScreen(self.p), lambda ok: ok and self.app.pop_to_list())
 
     def action_back(self) -> None:
         self.app.pop_screen()

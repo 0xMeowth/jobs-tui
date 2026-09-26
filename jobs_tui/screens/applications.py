@@ -10,7 +10,9 @@ from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Label, ListItem, ListView, Static
 
-from jobs_tui import application
+from textual import work
+
+from jobs_tui import application, render
 from jobs_tui.app import CommandBar
 from jobs_tui.paths import AppPaths, list_applications
 
@@ -104,18 +106,31 @@ class ApplicationsScreen(Screen):
             if p is not None:
                 self.app.current = p
                 self.app.notify(f"Created {p.company_slug}/{p.role_slug}")
+                self.brief(p)
 
         self.app.push_screen(NewApplicationScreen(), done)
 
     def action_open_app(self) -> None:
         if self.app.current:
-            from jobs_tui.screens.review import ReviewScreen
-            self.app.push_screen(ReviewScreen(self.app.current))
+            self.open_review(self.app.current)
+
+    def open_review(self, p: AppPaths) -> None:
+        from jobs_tui.screens.review import ReviewScreen
+        self.app.push_screen(ReviewScreen(p))
 
     def action_brief(self) -> None:
         if self.app.current:
-            from jobs_tui.screens.brief import BriefScreen
-            self.app.push_screen(BriefScreen(self.app.current), lambda _: self.call_later(self.refresh_list))
+            self.brief(self.app.current)
+
+    def brief(self, p: AppPaths) -> None:
+        from jobs_tui.screens.brief import BriefScreen
+
+        def done(result: str | None) -> None:
+            self.call_later(self.refresh_list)
+            if result == "start":
+                self.open_review(p)
+
+        self.app.push_screen(BriefScreen(p), done)
 
     def action_render(self) -> None:
         if self.app.current:
@@ -151,8 +166,19 @@ class ApplicationsScreen(Screen):
         if not self.app.current:
             return
         editor = os.environ.get("EDITOR", "vi")
+        p = self.app.current
         try:
             with self.app.suspend():
-                subprocess.run(shlex.split(editor) + [str(self.app.current.resume_yaml)])
+                subprocess.run(shlex.split(editor) + [str(p.resume_yaml)])
         except OSError as err:
             self.app.notify(escape(f"Cannot run editor {editor!r}: {err}"), severity="error")
+            return
+        self.rerender(p)
+
+    @work(thread=True, exclusive=True, group="render")
+    def rerender(self, p: AppPaths) -> None:
+        try:
+            render.render(self.app.jobs, p)
+        except render.RenderError as err:
+            self.app.call_from_thread(self.app.notify, escape(f"Render failed: {err}"), severity="error")
+        self.app.call_from_thread(self.refresh_list, p.root)

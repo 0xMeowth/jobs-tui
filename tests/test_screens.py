@@ -79,9 +79,12 @@ async def test_new_application_creates_and_imports_pasted_jd(jobs_dir, two_apps)
         await pilot.click("#create")
         for _ in range(20):
             await pilot.pause(0.1)
-            if app.screen.__class__.__name__ == "ApplicationsScreen":
+            if app.screen.__class__.__name__ == "BriefScreen":
                 break
+        assert app.screen.__class__.__name__ == "BriefScreen"
+        await pilot.press("escape")
         await pilot.pause(0.1)
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
         p = paths.app_paths(jobs_dir, "Acme", "Analyst")
         assert app.current is not None and app.current.root == p.root
     assert p.meta.exists()
@@ -206,8 +209,11 @@ async def test_brief_writes_request_and_sends(jobs_dir, two_apps, monkeypatch):
         assert not app.screen.query("#pane")
         app.screen.query_one("#brief", TextArea).text = "Focus on analytics leadership."
         await pilot.click("#start")
-        await pilot.pause()
-        await app.workers.wait_for_complete()
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if sent:
+                break
+        assert app.screen.__class__.__name__ == "ReviewScreen"
     a = app.current
     req = a.review_request.read_text()
     assert "Focus on analytics leadership." in req and "jd.md" in req and "proposed-edits.json" in req
@@ -834,7 +840,7 @@ async def test_new_application_enter_in_input_creates(jobs_dir):
         await pilot.press(*"PM", "enter")
         for _ in range(20):
             await pilot.pause(0.1)
-            if app.screen.__class__.__name__ == "ApplicationsScreen":
+            if app.screen.__class__.__name__ == "BriefScreen":
                 break
     assert paths.app_paths(jobs_dir, "Acme", "PM").meta.exists()
 
@@ -896,9 +902,11 @@ async def test_render_screen_keys_match_list(jobs_dir, reviewable, monkeypatch):
 async def test_edit_yaml_splits_editor_command(jobs_dir, reviewable, monkeypatch):
     import contextlib
     from jobs_tui.screens import applications
+    from jobs_tui import render
     calls = []
     monkeypatch.setenv("EDITOR", "code --wait")
     monkeypatch.setattr(applications.subprocess, "run", lambda args: calls.append(args))
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
     app = JobsApp(jobs_dir)
     monkeypatch.setattr(app, "suspend", contextlib.nullcontext)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -1011,7 +1019,7 @@ async def test_new_application_reuses_existing_company(jobs_dir, two_apps):
         await pilot.click("#create")
         for _ in range(20):
             await pilot.pause(0.1)
-            if app.screen.__class__.__name__ == "ApplicationsScreen":
+            if app.screen.__class__.__name__ == "BriefScreen":
                 break
         p = paths.app_paths(jobs_dir, "Fabrikam", "Analyst")
         assert p.meta.exists()
@@ -1112,3 +1120,61 @@ async def test_brief_prefills_from_saved_request(jobs_dir, two_apps):
         await pilot.press("b")
         await pilot.pause()
         assert app.screen.query_one("#brief", TextArea).text == "Lead with analytics.\nMention SQL."
+
+
+async def test_brief_start_opens_review(jobs_dir, two_apps, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    monkeypatch.setattr(bridge_mod, "copy_to_clipboard", lambda t: None)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        await pilot.click("#start")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
+async def test_finalize_from_render_returns_to_list(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "RenderScreen"
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#yes")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        assert reviewable.submitted_pdf.exists()
+
+
+async def test_edit_yaml_rerenders_and_refreshes(jobs_dir, reviewable, monkeypatch):
+    import contextlib
+    from jobs_tui import render
+    from jobs_tui.screens import applications
+    monkeypatch.setenv("EDITOR", "true")
+    monkeypatch.setattr(applications.subprocess, "run", lambda args: None)
+    rendered = []
+    monkeypatch.setattr(render, "render", lambda jobs, p: rendered.append(p) or p.resume_pdf.write_bytes(b"%PDF") or render.RenderResult(p.resume_pdf, 3))
+    monkeypatch.setattr(render, "page_count", lambda pdf: 3)
+    app = JobsApp(jobs_dir)
+    monkeypatch.setattr(app, "suspend", contextlib.nullcontext)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert rendered == [reviewable]
+        assert app.pages == 3

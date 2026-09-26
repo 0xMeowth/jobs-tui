@@ -40,7 +40,7 @@ def saved_brief(p: AppPaths) -> str:
     return m.group(1).strip() if m else ""
 
 
-class BriefScreen(ModalScreen[None]):
+class BriefScreen(ModalScreen[str | None]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
     def __init__(self, p: AppPaths) -> None:
@@ -71,4 +71,4 @@ class BriefScreen(ModalScreen[None]):
         self.p.review_request.write_text(REQUEST.format(company=meta.company, role=meta.role, brief=brief))
         if event.button.id == "start":
             self.app.send_to_agent(bridge.start_review_prompt(self.p.root))
-        self.dismiss(None)
+        self.dismiss(event.button.id)
