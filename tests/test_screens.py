@@ -459,7 +459,7 @@ async def test_review_accept_writes_yaml_and_feedback(jobs_dir, reviewable, monk
         assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
         assert load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
         assert app.pages == 2
-        await pilot.press("r")
+        await pilot.press("x")
         await pilot.pause()
         assert load_feedback(reviewable.review_feedback)["e2"].status == "rejected"
 
@@ -595,7 +595,7 @@ async def test_render_screen_shows_pages_and_autofit(jobs_dir, reviewable, monke
         from textual.widgets import Static
         info = app.screen.query_one("#render-info", Static)
         assert "3" in str(info.content) and "limit 2" in str(info.content)
-        await pilot.press("f")
+        await pilot.press("a")
         await pilot.pause(0.3)
         assert "0.6em" in str(info.content) and app.pages == 2
         await pilot.press("t")
@@ -621,7 +621,7 @@ async def test_render_screen_ignores_superseded_render(jobs_dir, reviewable, mon
         await pilot.pause()
         from textual.widgets import Static
         info = app.screen.query_one("#render-info", Static)
-        await pilot.press("f")
+        await pilot.press("a")
         for _ in range(50):
             await pilot.pause(0.05)
             if "Pages       2" in str(info.content):
@@ -870,7 +870,7 @@ async def test_review_accept_with_corrupt_yaml_keeps_running(jobs_dir, reviewabl
     assert not reviewable.review_feedback.exists()
 
 
-async def test_render_screen_b_goes_back(jobs_dir, reviewable, monkeypatch):
+async def test_render_screen_keys_match_list(jobs_dir, reviewable, monkeypatch):
     from jobs_tui import render
     monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
     app = JobsApp(jobs_dir)
@@ -881,7 +881,16 @@ async def test_render_screen_b_goes_back(jobs_dir, reviewable, monkeypatch):
         assert app.screen.__class__.__name__ == "RenderScreen"
         await pilot.press("b")
         await pilot.pause()
-        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        assert app.screen.__class__.__name__ == "RenderScreen"
+        from textual.widgets import Select
+        await pilot.press("p")
+        await pilot.pause()
+        assert app.screen.query_one("#agent-pane", Select).has_focus
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "FinalizeScreen"
 
 
 async def test_edit_yaml_splits_editor_command(jobs_dir, reviewable, monkeypatch):
@@ -899,7 +908,7 @@ async def test_edit_yaml_splits_editor_command(jobs_dir, reviewable, monkeypatch
     assert calls == [["code", "--wait", str(reviewable.resume_yaml)]]
 
 
-async def test_review_p_still_renders(jobs_dir, reviewable, monkeypatch):
+async def test_review_r_renders_and_p_pairs(jobs_dir, reviewable, monkeypatch):
     from jobs_tui import render
     monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
     app = JobsApp(jobs_dir)
@@ -908,7 +917,13 @@ async def test_review_p_still_renders(jobs_dir, reviewable, monkeypatch):
         await pilot.press("enter")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "ReviewScreen"
+        from textual.widgets import Select
         await pilot.press("p")
+        await pilot.pause()
+        assert app.screen.query_one("#agent-pane", Select).has_focus
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.press("r")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "RenderScreen"
 

@@ -16,11 +16,10 @@ class RenderScreen(Screen):
     AUTO_FOCUS = ""
     BINDINGS = [
         Binding("o", "open_pdf", "Open PDF"),
-        Binding("f", "autofit", "Auto-fit"),
+        Binding("a", "autofit", "Auto-fit"),
         Binding("t", "trim", "Ask agent to trim"),
-        Binding("n", "finalize", "Finalize"),
+        Binding("f", "finalize", "Finalize"),
         Binding("escape", "back", "Back"),
-        Binding("b", "back", "Back"),
     ]
 
     def __init__(self, p: AppPaths) -> None:
@@ -30,7 +29,7 @@ class RenderScreen(Screen):
         self._gen = 0
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]RENDER[/b]  o open PDF · f auto-fit · t ask agent to trim · n finalize · Esc back", classes="help")
+        yield Static("[b]RENDER[/b]  o open PDF · a auto-fit · t ask agent to trim · f finalize · p pair · Esc back", classes="help")
         yield Static("Rendering…", id="render-info")
         yield CommandBar()
 
@@ -72,7 +71,7 @@ class RenderScreen(Screen):
             f"PDF         {escape(str(r.pdf))}",
         ]
         if over > 0:
-            lines += ["", "Press f to tighten spacing, or t to ask the agent to trim content."]
+            lines += ["", "Press a to tighten spacing, or t to ask the agent to trim content."]
         self.query_one("#render-info", Static).update("\n".join(lines))
 
     def action_open_pdf(self) -> None:
