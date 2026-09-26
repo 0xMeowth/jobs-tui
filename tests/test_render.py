@@ -1,10 +1,9 @@
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
-from jobs_tui import application, paths, render
+from jobs_tui import application, render
 
 HAS_TYPST = shutil.which("typst") is not None and shutil.which("pdfinfo") is not None
 needs_typst = pytest.mark.skipif(not HAS_TYPST, reason="typst and poppler required")
@@ -29,7 +28,22 @@ def test_render_error_surfaces_typst_message(jobs_dir, app):
     app.resume_yaml.write_text("name: X\n")  # no contact block -> typst error
     with pytest.raises(render.RenderError) as e:
         render.render(jobs_dir, app)
-    assert "contact" in str(e.value) or "error" in str(e.value)
+    assert "contact" in str(e.value)
+
+
+@needs_typst
+def test_knobs_reach_typst(jobs_dir, app):
+    tight = render.compile(jobs_dir, app, render.LADDER[-1]).read_bytes()
+    default = render.compile(jobs_dir, app, {}).read_bytes()
+    assert tight != default
+
+
+def test_missing_tool_raises_render_error(jobs_dir, app, monkeypatch):
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("No such file or directory: 'typst'")
+    monkeypatch.setattr(subprocess, "run", missing)
+    with pytest.raises(render.RenderError, match="typst"):
+        render.render(jobs_dir, app)
 
 
 def test_autofit_walks_ladder_and_saves_knobs(jobs_dir, app, monkeypatch):

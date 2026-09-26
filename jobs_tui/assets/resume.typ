@@ -4,7 +4,7 @@
 #let body-size   = knob("body_size", "9.5pt")
 #let leading     = knob("leading", "0.7em")     // space between lines
 #let section-gap = knob("section_gap", "14pt")  // space above a section bar
-#let entry-gap   = knob("entry_gap", "12pt")  // space above each job
+#let entry-gap   = knob("entry_gap", "16pt")  // space above each job
 #let margin-x    = knob("margin_x", "1cm")
 #let margin-y    = knob("margin_y", "1.2cm")
 // ---------------------------------------------------------
@@ -26,11 +26,11 @@
 #let bullets(items) = list(..items.map(b => b.text))
 
 #let entry(e) = block(breakable: false, above: entry-gap, below: 0pt)[
-  #grid(
+  #block(below: 0.35em, grid(
     columns: (1fr, auto), column-gutter: 8pt,
     text(weight: "bold", e.org),
     text(weight: "bold", e.dates),
-  )
+  ))
   #if "title" in e [#e.title \ ]
   #if "bullets" in e { bullets(e.bullets) }
 ]
