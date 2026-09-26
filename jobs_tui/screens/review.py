@@ -3,6 +3,7 @@ import json
 import threading
 from functools import partial
 
+from rich.markup import escape
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -45,7 +46,8 @@ class EditTextScreen(ModalScreen[str | None]):
         self.dismiss(None)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.dismiss(self.query_one("#edit-text", TextArea).text.strip() if event.button.id == "ok" else None)
+        text = self.query_one("#edit-text", TextArea).text.strip()
+        self.dismiss(text if event.button.id == "ok" and text else None)
 
 
 class CommentScreen(ModalScreen[str | None]):
@@ -74,11 +76,11 @@ def word_diff(a: str, b: str) -> str:
     out = []
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a.split(), b.split()).get_opcodes():
         if tag == "equal":
-            out.append(" ".join(a.split()[i1:i2]))
+            out.append(escape(" ".join(a.split()[i1:i2])))
         if tag in ("delete", "replace"):
-            out.append("[red strike]" + " ".join(a.split()[i1:i2]) + "[/]")
+            out.append("[red strike]" + escape(" ".join(a.split()[i1:i2])) + "[/]")
         if tag in ("insert", "replace"):
-            out.append("[green]" + " ".join(b.split()[j1:j2]) + "[/]")
+            out.append("[green]" + escape(" ".join(b.split()[j1:j2])) + "[/]")
     return " ".join(out)
 
 
@@ -147,7 +149,7 @@ class ReviewScreen(Screen):
         index = lv.index or 0
         await lv.clear()
         await lv.extend([
-            ListItem(Label(f"{GLYPH[E.status_of(e.id, self.decisions)]} {text}"), name=e.id)
+            ListItem(Label(f"{GLYPH[E.status_of(e.id, self.decisions)]} {escape(text)}"), name=e.id)
             for e, text in zip(self.edits, labels)
         ])
         if self.edits:
@@ -163,13 +165,13 @@ class ReviewScreen(Screen):
     def show(self, e: E.Edit) -> None:
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
-        body = word_diff(e.current, e.proposed) if self.show_diff and e.op == "replace" else f"[dim]CURRENT[/dim]\n{e.current}\n\n[b]PROPOSED[/b]\n{e.proposed}"
+        body = word_diff(e.current, e.proposed) if self.show_diff and e.op == "replace" else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
         lines = [
-            f"[b]{E.label(e)}[/b]  {e.op}  · {c['pending']} pending, {c['accepted']} accepted, {c['rejected']} rejected, {c['needs_revision']} need revision", "",
-            f"ALIGNMENT  {', '.join(e.jd_alignment) or '-'}", "",
+            f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}  · {c['pending']} pending, {c['accepted']} accepted, {c['rejected']} rejected, {c['needs_revision']} need revision", "",
+            f"ALIGNMENT  {escape(', '.join(e.jd_alignment)) or '-'}", "",
             body, "",
-            f"[dim]REASON[/dim]\n{e.reason}", "",
-            f"Status: {d.status}" + (f"\nFeedback: {d.feedback}" if d.feedback else "") + (f"\nFinal: {d.final}" if d.final and d.final != e.proposed else ""),
+            f"[dim]REASON[/dim]\n{escape(e.reason)}", "",
+            f"Status: {d.status}" + (f"\nFeedback: {escape(d.feedback)}" if d.feedback else "") + (f"\nFinal: {escape(d.final)}" if d.final and d.final != e.proposed else ""),
         ]
         self.query_one("#edit-detail", Static).update("\n".join(lines))
 
@@ -184,7 +186,10 @@ class ReviewScreen(Screen):
         E.save_feedback(self.p.review_feedback, self.decisions)
         self.call_later(self.reload)
 
-    def apply(self, e: E.Edit, final: str | None) -> None:
+    def apply(self, e: E.Edit, final: str | None, render: bool = True) -> None:
+        if E.status_of(e.id, self.decisions) == "accepted":
+            self.app.notify("Already accepted")
+            return
         resume = Resume.load(self.p.resume_yaml)
         try:
             apply_edit(resume, e.as_dict(), final)
@@ -193,7 +198,8 @@ class ReviewScreen(Screen):
             return
         resume.save(self.p.resume_yaml)
         self.decide(e, "accepted", final=final if final is not None else e.proposed)
-        self.rerender()
+        if render:
+            self.rerender()
 
     @work(thread=True, exclusive=True, group="render")
     def rerender(self) -> None:
@@ -220,6 +226,9 @@ class ReviewScreen(Screen):
         e = self.current()
         if not e or e.op == "remove":
             return
+        if E.status_of(e.id, self.decisions) == "accepted":
+            self.app.notify("Already accepted")
+            return
         self.app.push_screen(EditTextScreen(e.proposed), lambda text: text is not None and self.apply(e, text))
 
     def action_comment(self) -> None:
@@ -244,7 +253,8 @@ class ReviewScreen(Screen):
 
     def action_accept_all(self) -> None:
         for e in [e for e in self.edits if E.status_of(e.id, self.decisions) == "pending"]:
-            self.apply(e, None)
+            self.apply(e, None, render=False)
+        self.rerender()
 
     def action_send_feedback(self) -> None:
         self.app.send_to_agent(bridge.feedback_prompt(self.p.root))

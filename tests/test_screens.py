@@ -246,6 +246,8 @@ async def test_review_accept_writes_yaml_and_feedback(jobs_dir, reviewable, monk
 async def test_review_comment_and_send_feedback(jobs_dir, reviewable, monkeypatch):
     sent = []
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, force=False: sent.append(text) or "sent")
+    from jobs_tui.model import Resume
+    original = Resume.load(reviewable.resume_yaml).get("acme.b1.text")
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -260,6 +262,8 @@ async def test_review_comment_and_send_feedback(jobs_dir, reviewable, monkeypatc
         from jobs_tui.edits import load_feedback
         d = load_feedback(reviewable.review_feedback)["e1"]
         assert d.status == "needs_revision" and d.feedback == "Overstates deployment."
+        from jobs_tui.model import Resume
+        assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == original
         await pilot.press("s")
         await pilot.pause()
     assert sent and "review-feedback.json" in sent[0]
@@ -317,4 +321,40 @@ async def test_review_survives_partial_write(jobs_dir, reviewable):
             if len(app.screen.query_one("#edit-list", ListView).children) == 3:
                 break
         assert len(app.screen.query_one("#edit-list", ListView).children) == 3
+        assert app.is_running
+
+
+async def test_review_accept_add_twice_adds_one_bullet(jobs_dir, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [{"id": "e1", "op": "add", "entry": "acme", "proposed": "Led a pricing study", "reason": "impact"}]}))
+    before = len(Resume.load(p.resume_yaml).node("acme")["bullets"])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        await pilot.press("a")
+        await pilot.pause(0.3)
+    bullets = Resume.load(p.resume_yaml).node("acme")["bullets"]
+    assert len(bullets) == before + 1
+    assert [b["text"] for b in bullets].count("Led a pricing study") == 1
+
+
+async def test_review_shows_markup_literally(jobs_dir):
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    text = "Use [bold] tags and [/] closers"
+    p.proposed_edits.write_text(json.dumps({"edits": [{"id": "e1", "path": "acme.b1.text", "current": "x", "proposed": text, "reason": "[/]"}]}))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        from textual.widgets import Static
+        assert text in app.screen.query_one("#edit-detail", Static).render().plain
         assert app.is_running
