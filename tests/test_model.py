@@ -45,6 +45,11 @@ def test_add_bullet_at_end_when_after_is_none(resume):
     assert [b["id"] for b in resume.node("skills")["bullets"]][-1] == "skills.b3"
 
 
+def test_add_bullet_unknown_after_raises_keyerror(resume):
+    with pytest.raises(KeyError):
+        resume.add_bullet("acme", "x", after="globex.b1")
+
+
 def test_remove_keeps_other_ids(resume):
     resume.remove("acme.b1")
     assert [b["id"] for b in resume.node("acme")["bullets"]] == ["acme.b2"]

@@ -64,7 +64,10 @@ class Resume:
         if after is None:
             bullets.append(bullet)
         else:
-            pos = next(i for i, b in enumerate(bullets) if b["id"] == after) + 1
+            try:
+                pos = next(i for i, b in enumerate(bullets) if b["id"] == after) + 1
+            except StopIteration:
+                raise KeyError(f"no bullet {after!r} in entry {entry_id!r}") from None
             bullets.insert(pos, bullet)
         self._reindex()
         return new_id
