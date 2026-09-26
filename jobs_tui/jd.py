@@ -1,4 +1,5 @@
 import re
+import time
 from dataclasses import dataclass
 from datetime import date
 from urllib.parse import parse_qs, urlparse
@@ -35,7 +36,7 @@ def linkedin_job_id(url: str) -> str | None:
     q = parse_qs(u.query)
     if "currentJobId" in q:
         return q["currentJobId"][0]
-    m = re.search(r"/jobs/view/(?:[^/]*?-)?(\d+)", u.path)
+    m = re.search(r"/jobs/view/(?:[^/]*-)?(\d+)/?$", u.path)
     return m.group(1) if m else None
 
 
@@ -45,7 +46,10 @@ def _first_text(doc, selector: str) -> str | None:
 
 
 def parse_linkedin(html: str, url: str) -> JD:
-    doc = LH.fromstring(html)
+    try:
+        doc = LH.fromstring(html)
+    except Exception as e:
+        raise JDError("LinkedIn returned an empty or unreadable page") from e
     nodes = doc.cssselect("div.show-more-less-html__markup, div.description__text")
     if not nodes:
         raise JDError("LinkedIn page has no description container")
@@ -68,6 +72,8 @@ def fetch_http(url: str, timeout: float = 8) -> str:
         r = requests.get(url, impersonate="chrome", timeout=timeout, allow_redirects=True)
     except Exception as e:
         raise JDError(f"HTTP fetch failed: {e}") from e
+    if r.status_code >= 400:
+        raise JDError(f"HTTP {r.status_code}")
     return r.text
 
 
@@ -78,12 +84,16 @@ def fetch_linkedin(job_id: str, url: str, timeout: float = 8) -> tuple[JD, str]:
 
 def fetch_browser(url: str, timeout: float = 15) -> str:
     from patchright.sync_api import sync_playwright
+    deadline = time.monotonic() + timeout
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(channel="chrome", headless=True, timeout=timeout * 1000)
+            remaining = max(0.0, deadline - time.monotonic())
+            browser = pw.chromium.launch(channel="chrome", headless=True, timeout=remaining * 1000)
             page = browser.new_page()
-            page.goto(url, wait_until="domcontentloaded", timeout=max(1000, (timeout - 5) * 1000))
-            page.wait_for_timeout(2500)
+            remaining = max(0.0, deadline - time.monotonic())
+            page.goto(url, wait_until="domcontentloaded", timeout=max(1000, (remaining - 3) * 1000))
+            remaining = max(0.0, deadline - time.monotonic())
+            page.wait_for_timeout(min(2500, max(0, (remaining - 0.5) * 1000)))
             html = page.content()
             browser.close()
     except Exception as e:
@@ -95,7 +105,10 @@ def extract_generic(html: str, url: str, method: str) -> JD | None:
     text = trafilatura.extract(html, url=url, include_links=False, favor_recall=True, output_format="markdown") or ""
     text = text.strip()
     try:
-        visible = len(LH.fromstring(html).text_content())
+        doc = LH.fromstring(html)
+        for bad in doc.xpath("//script|//style|//noscript"):
+            bad.drop_tree()
+        visible = len(doc.text_content())
     except Exception:
         visible = len(text)
     if len(text) < MIN_CHARS or len(text) < MIN_RATIO * max(visible, 1):
@@ -124,8 +137,12 @@ def import_url(url: str, p: AppPaths) -> JD:
     if job_id:
         j, html = fetch_linkedin(job_id, url)
     else:
-        html = fetch_http(url)
-        j = extract_generic(html, url, "http")
+        try:
+            html = fetch_http(url)
+            j = extract_generic(html, url, "http")
+        except JDError:
+            html = None
+            j = None
         if j is None:
             html = fetch_browser(url)
             j = extract_generic(html, url, "browser")

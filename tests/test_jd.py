@@ -16,6 +16,9 @@ def test_linkedin_job_id_forms():
     assert jd.linkedin_job_id("https://www.linkedin.com/jobs/view/pastry-chef-at-northwind-bakery-4000000001/") == "4000000001"
     assert jd.linkedin_job_id("https://sg.linkedin.com/jobs/view/4000000001/?refId=x") == "4000000001"
     assert jd.linkedin_job_id("https://careers.example.com/job/12") is None
+    assert jd.linkedin_job_id(
+        "https://www.linkedin.com/jobs/view/analyst-12-month-contract-at-foo-4000000001/"
+    ) == "4000000001"
 
 
 def test_parse_linkedin_fixture():
@@ -28,6 +31,11 @@ def test_parse_linkedin_fixture():
     assert "Show more" not in j.text and "Show less" not in j.text
     assert "- Partner with key stakeholders" in j.text
     assert "  \n" not in j.text
+
+
+def test_parse_linkedin_empty_body_raises_jderror():
+    with pytest.raises(jd.JDError):
+        jd.parse_linkedin("", SEARCH_URL)
 
 
 def test_to_markdown_header():
@@ -57,6 +65,27 @@ def test_extract_generic_rejects_thin_page():
     assert jd.extract_generic(html, "https://x", "http") is None
 
 
+def test_extract_generic_ignores_script_in_ratio():
+    body = "<p>" + ("Real job content describing the role and duties in detail. " * 12) + "</p>"
+    script = "<script>" + ('{"a": 1, "b": 2}, ' * 300) + "</script>"
+    html = f"<html><head><title>Role</title>{script}</head><body><main><h1>Role</h1>{body}</main></body></html>"
+    j = jd.extract_generic(html, "https://x", "http")
+    assert j is not None
+    assert "Real job content" in j.text
+
+
+def test_fetch_http_status_error(monkeypatch):
+    from curl_cffi import requests
+
+    class Resp:
+        status_code = 403
+        text = "blocked"
+
+    monkeypatch.setattr(requests, "get", lambda *a, **kw: Resp())
+    with pytest.raises(jd.JDError):
+        jd.fetch_http("https://x")
+
+
 def test_import_url_linkedin_writes_files(tmp_path, monkeypatch):
     p = AppPaths(tmp_path / "app"); p.root.mkdir()
     monkeypatch.setattr(jd, "fetch_linkedin", lambda job_id, url, timeout=8: (jd.parse_linkedin(FIX.read_text(), url), FIX.read_text()))
@@ -74,6 +103,19 @@ def test_import_url_falls_back_to_browser(tmp_path, monkeypatch):
     monkeypatch.setattr(jd, "fetch_browser", lambda url, timeout=15: calls.append(url) or good)
     j = jd.import_url("https://careers.example.com/job/1", p)
     assert calls == ["https://careers.example.com/job/1"]
+    assert j.method == "browser"
+
+
+def test_import_url_http_error_falls_back_to_browser(tmp_path, monkeypatch):
+    p = AppPaths(tmp_path / "app"); p.root.mkdir()
+    good = "<html><head><title>Role</title></head><body><main><p>" + "Real job text here. " * 60 + "</p></main></body></html>"
+
+    def raise_http(url, timeout=8):
+        raise jd.JDError("HTTP 403")
+
+    monkeypatch.setattr(jd, "fetch_http", raise_http)
+    monkeypatch.setattr(jd, "fetch_browser", lambda url, timeout=15: good)
+    j = jd.import_url("https://careers.example.com/job/1", p)
     assert j.method == "browser"
 
 
