@@ -75,3 +75,15 @@ def test_apply_add_and_remove(resume):
     rem = {"id": "e3", "op": "remove", "path": "globex.b1.text"}
     assert apply_edit(resume, rem, None) == "globex.b1"
     assert [b["id"] for b in resume.node("globex")["bullets"]] == ["globex.b2"]
+
+
+def test_apply_remove_with_bare_id_removes_only_that_bullet(resume):
+    rem = {"id": "e1", "op": "remove", "path": "acme.b1"}
+    assert apply_edit(resume, rem, None) == "acme.b1"
+    assert [b["id"] for b in resume.node("acme")["bullets"]] == ["acme.b2"]
+
+
+def test_set_unknown_field_raises(resume):
+    with pytest.raises(KeyError):
+        resume.set("acme.b1.txt", "x")
+    assert "txt" not in resume.node("acme.b1")

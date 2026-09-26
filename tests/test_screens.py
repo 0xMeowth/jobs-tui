@@ -520,3 +520,158 @@ async def test_tracker_screen_handles_duplicate_folder(jobs_dir, two_apps):
         await pilot.pause()
         assert app.screen.__class__.__name__ == "ReviewScreen"
         assert app.current.root == jobs_dir / "companies" / "northwind" / "ai-analyst"
+
+
+def record_notes(app):
+    notes = []
+    real = app.notify
+
+    def notify(message, *args, **kwargs):
+        notes.append(str(message))
+        return real(message, *args, **kwargs)
+
+    app.notify = notify
+    return notes
+
+
+async def test_send_twice_to_busy_pane_forces(jobs_dir, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    monkeypatch.setenv("HERDR_ENV", "1")
+    monkeypatch.setattr(bridge_mod.shutil, "which", lambda n: "/x/herdr")
+    pane = bridge_mod.Pane("wK:p1", "codex", "working", "/j", "t")
+    monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane if pid == "wK:p1" else None)
+    sent = []
+    monkeypatch.setattr(bridge_mod, "run_in_pane", lambda pid, text: sent.append((pid, text)))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.bridge.pane_id = "wK:p1"
+        app.send_to_agent("hello")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert sent == []
+        app.send_to_agent("hello")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+    assert sent == [("wK:p1", "hello")]
+
+
+async def test_no_pane_notify_explains_pairing(jobs_dir, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    monkeypatch.setattr(bridge_mod, "copy_to_clipboard", lambda t: None)
+    monkeypatch.setenv("HERDR_ENV", "0")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        notes = record_notes(app)
+        app.send_to_agent("hello")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+    assert "No agent pane. Prompt copied to clipboard. Press b on an application to pair a pane." in notes
+
+
+async def test_applications_detail_shows_markup_literally(jobs_dir):
+    application.create(jobs_dir, "Acme [b]", "Role [/] & Co", "https://x/[/]")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Static
+        text = app.screen.query_one("#app-detail", Static).render().plain
+        assert "Role [/] & Co" in text and "Acme [b]" in text and "https://x/[/]" in text
+        assert app.is_running
+
+
+async def test_new_application_without_master_shows_error(jobs_dir):
+    paths.master_yaml(jobs_dir).unlink()
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, Static, TextArea
+        app.screen.query_one("#company", Input).value = "Acme"
+        app.screen.query_one("#role", Input).value = "Analyst"
+        app.screen.query_one("#paste", TextArea).text = "Some description."
+        await pilot.click("#create")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "NewApplicationScreen"
+        assert "resume-master.yaml" in app.screen.query_one("#new-status", Static).render().plain
+    assert paths.list_applications(jobs_dir) == []
+
+
+async def test_new_application_enter_in_input_creates(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, TextArea
+        app.screen.query_one("#company", Input).value = "Acme"
+        app.screen.query_one("#paste", TextArea).text = "Some description."
+        app.screen.query_one("#role", Input).focus()
+        await pilot.press(*"PM", "enter")
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if app.screen.__class__.__name__ == "ApplicationsScreen":
+                break
+    assert paths.app_paths(jobs_dir, "Acme", "PM").meta.exists()
+
+
+async def test_review_reports_permanently_malformed_edits(jobs_dir):
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [{"id": "e1"}]}))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        from textual.widgets import Static
+        for _ in range(30):
+            await pilot.pause(0.1)
+            if "unreadable" in app.screen.query_one("#edit-detail", Static).render().plain:
+                break
+        assert "unreadable" in app.screen.query_one("#edit-detail", Static).render().plain
+        assert app.is_running
+
+
+async def test_review_accept_with_corrupt_yaml_keeps_running(jobs_dir, reviewable):
+    reviewable.resume_yaml.write_text("a: [1")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        notes = record_notes(app)
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        assert app.is_running
+        assert any("resume.yaml" in n for n in notes)
+    assert not reviewable.review_feedback.exists()
+
+
+async def test_render_screen_b_goes_back(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "RenderScreen"
+        await pilot.press("b")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
+async def test_edit_yaml_splits_editor_command(jobs_dir, reviewable, monkeypatch):
+    import contextlib
+    from jobs_tui.screens import applications
+    calls = []
+    monkeypatch.setenv("EDITOR", "code --wait")
+    monkeypatch.setattr(applications.subprocess, "run", lambda args: calls.append(args))
+    app = JobsApp(jobs_dir)
+    monkeypatch.setattr(app, "suspend", contextlib.nullcontext)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+    assert calls == [["code", "--wait", str(reviewable.resume_yaml)]]

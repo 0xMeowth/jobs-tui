@@ -44,3 +44,10 @@ def test_summary_from_files(jobs_dir):
     assert s == {"jd": False, "edits_total": 0, "edits_pending": 0, "pages": None, "submitted": None}
     p.jd_md.write_text("# x")
     assert application.summary(p)["jd"] is True
+
+
+def test_create_without_master_leaves_no_folder(jobs_dir):
+    paths.master_yaml(jobs_dir).unlink(missing_ok=True)
+    with pytest.raises(FileNotFoundError):
+        application.create(jobs_dir, "A", "B", None)
+    assert not paths.app_paths(jobs_dir, "A", "B").root.exists()

@@ -1,3 +1,4 @@
+from rich.markup import escape
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import Vertical, Horizontal
@@ -34,6 +35,11 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
         elif event.button.id == "create":
             self.create()
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        event.stop()
+        if not self.query_one("#create", Button).disabled:
+            self.create()
+
     def action_cancel(self) -> None:
         self.workers.cancel_group(self, "fetch")
         self.dismiss(None)
@@ -55,6 +61,9 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
                 self.created = application.create(self.app.jobs, company, role, url)
             except FileExistsError:
                 status.update("That company/role folder already exists.")
+                return
+            except OSError as err:
+                status.update(escape(f"Cannot create application: {err}"))
                 return
         if pasted:
             jd.import_text(pasted, self.created)
@@ -83,6 +92,6 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
         if result is not None:
             self.dismiss(result)
             return
-        self.query_one("#new-status", Static).update(f"{error} Paste the description below and press Create.")
+        self.query_one("#new-status", Static).update(escape(f"{error} Paste the description below and press Create."))
         self.query_one("#create", Button).disabled = False
         self.query_one("#paste", TextArea).focus()

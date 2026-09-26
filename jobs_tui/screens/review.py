@@ -3,6 +3,7 @@ import json
 import threading
 from functools import partial
 
+import yaml
 from rich.markup import escape
 from textual import work
 from textual.app import ComposeResult
@@ -139,10 +140,14 @@ class ReviewScreen(Screen):
             edits = E.load_edits(self.p.proposed_edits)
             decisions = E.load_feedback(self.p.review_feedback)
             labels = [E.label(e) for e in edits]
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError):
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError) as err:
             # The agent may be mid-write; keep the last good state and try once more.
             if retry:
                 self.set_timer(0.5, partial(self.reload, retry=False))
+            elif self.is_mounted:
+                msg = escape(f"proposed-edits.json unreadable: {err}")
+                self.app.notify(msg, severity="error")
+                self.query_one("#edit-detail", Static).update(msg)
             return
         self.edits, self.decisions = edits, decisions
         lv = self.query_one("#edit-list", ListView)
@@ -190,11 +195,14 @@ class ReviewScreen(Screen):
         if E.status_of(e.id, self.decisions) == "accepted":
             self.app.notify("Already accepted")
             return
-        resume = Resume.load(self.p.resume_yaml)
         try:
+            resume = Resume.load(self.p.resume_yaml)
             apply_edit(resume, e.as_dict(), final)
+        except (yaml.YAMLError, OSError) as err:
+            self.app.notify(escape(f"Cannot read resume.yaml: {err}"), severity="error")
+            return
         except (KeyError, ValueError) as err:
-            self.app.notify(f"Cannot apply edit: {err}", severity="error")
+            self.app.notify(escape(f"Cannot apply edit: {err}"), severity="error")
             return
         resume.save(self.p.resume_yaml)
         self.decide(e, "accepted", final=final if final is not None else e.proposed)
@@ -206,7 +214,7 @@ class ReviewScreen(Screen):
         try:
             r = render.render(self.app.jobs, self.p)
         except render.RenderError as err:
-            self.app.call_from_thread(self.app.notify, f"Render failed: {err}", severity="error")
+            self.app.call_from_thread(self.app.notify, escape(f"Render failed: {err}"), severity="error")
             self.app.call_from_thread(self.app.set_pages, None)
             return
         self.app.call_from_thread(self.app.set_pages, r.pages)

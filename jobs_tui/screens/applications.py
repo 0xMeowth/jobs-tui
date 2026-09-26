@@ -1,7 +1,9 @@
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
@@ -73,10 +75,10 @@ class ApplicationsScreen(Screen):
         s = application.summary(p)
         self.app.set_pages(s["pages"])
         lines = [
-            f"[b]{meta.company}[/b] — {meta.role}", "",
+            f"[b]{escape(meta.company)}[/b] — {escape(meta.role)}", "",
             f"Created     {meta.created}",
             f"Submitted   {meta.submitted_date or 'no'}",
-            f"URL         {meta.url or '-'}", "",
+            f"URL         {escape(meta.url or '-')}", "",
             f"JD          {'imported' if s['jd'] else 'missing'}",
             f"Edits       {s['edits_pending']} pending of {s['edits_total']}",
             f"Pages       {s['pages'] if s['pages'] is not None else 'not rendered'}", "",
@@ -132,5 +134,8 @@ class ApplicationsScreen(Screen):
         if not self.app.current:
             return
         editor = os.environ.get("EDITOR", "vi")
-        with self.app.suspend():
-            subprocess.run([editor, str(self.app.current.resume_yaml)])
+        try:
+            with self.app.suspend():
+                subprocess.run(shlex.split(editor) + [str(self.app.current.resume_yaml)])
+        except OSError as err:
+            self.app.notify(escape(f"Cannot run editor {editor!r}: {err}"), severity="error")

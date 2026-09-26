@@ -44,6 +44,9 @@ class Resume:
         except KeyError:
             raise KeyError(f"no unit with id {node_id!r}") from None
 
+    def has(self, node_id: str) -> bool:
+        return node_id in self._index
+
     def parent_list(self, node_id: str) -> list:
         return self._parent[node_id]
 
@@ -53,7 +56,10 @@ class Resume:
 
     def set(self, path: str, value: str) -> None:
         node_id, field = split_path(path)
-        self.node(node_id)[field] = value
+        node = self.node(node_id)
+        if field not in node:
+            raise KeyError(f"{node_id!r} has no field {field!r}")
+        node[field] = value
 
     def add_bullet(self, entry_id: str, text: str, after: str | None) -> str:
         entry = self.node(entry_id)
@@ -98,7 +104,7 @@ def apply_edit(resume: Resume, edit: dict, final: str | None) -> str | None:
     if op == "add":
         return resume.add_bullet(edit["entry"], text, edit.get("after"))
     if op == "remove":
-        node_id = split_path(edit["path"])[0]
+        node_id = edit["path"] if resume.has(edit["path"]) else split_path(edit["path"])[0]
         resume.remove(node_id)
         return node_id
     raise ValueError(f"unknown op {op!r}")

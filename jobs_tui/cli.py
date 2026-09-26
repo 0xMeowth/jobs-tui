@@ -29,15 +29,22 @@ def cmd_doctor(jobs: Path) -> int:
 
 
 def cmd_jd(url: str) -> int:
-    job_id = jd.linkedin_job_id(url)
-    if job_id:
-        j, _ = jd.fetch_linkedin(job_id, url)
-    else:
-        html = jd.fetch_http(url)
-        j = jd.extract_generic(html, url, "http") or jd.extract_generic(jd.fetch_browser(url), url, "browser")
-        if j is None:
-            print("Could not extract a job description.", file=sys.stderr)
-            return 1
+    try:
+        job_id = jd.linkedin_job_id(url)
+        if job_id:
+            j, _ = jd.fetch_linkedin(job_id, url)
+        else:
+            try:
+                j = jd.extract_generic(jd.fetch_http(url), url, "http")
+            except jd.JDError:
+                j = None
+            if j is None:
+                j = jd.extract_generic(jd.fetch_browser(url), url, "browser")
+            if j is None:
+                raise jd.JDError("Could not extract a job description.")
+    except jd.JDError as e:
+        print(e, file=sys.stderr)
+        return 1
     print(jd.to_markdown(j, date.today()), end="")
     return 0
 
@@ -57,6 +64,9 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_doctor(jobs)
     if args.cmd == "jd":
         return cmd_jd(args.url)
+    if not master_yaml(jobs).exists() or not template_typ(jobs).exists():
+        print(f"Templates missing in {jobs}. Run: jobs-tui init")
+        return 1
     from jobs_tui.app import JobsApp
     JobsApp(jobs).run()
     return 0

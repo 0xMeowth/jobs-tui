@@ -20,6 +20,7 @@ class RenderScreen(Screen):
         Binding("t", "trim", "Ask agent to trim"),
         Binding("n", "finalize", "Finalize"),
         Binding("escape", "back", "Back"),
+        Binding("b", "back", "Back"),
     ]
 
     def __init__(self, p: AppPaths) -> None:

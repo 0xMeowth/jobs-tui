@@ -61,6 +61,7 @@ class JobsApp(App):
         self.bridge = Bridge()
         self.current: AppPaths | None = None
         self.pages: int | None = None
+        self._busy_text: str | None = None
 
     def on_mount(self) -> None:
         from jobs_tui.screens.applications import ApplicationsScreen
@@ -73,17 +74,19 @@ class JobsApp(App):
             return
 
     def send_to_agent(self, text: str, force: bool = False) -> None:
+        force = force or (text == self._busy_text)
         self.run_worker(partial(self._deliver, text, force), thread=True, group="deliver")
 
     def _deliver(self, text: str, force: bool) -> None:
         outcome = self.bridge.deliver(text, force=force)
-        self.call_from_thread(self._notify_outcome, outcome)
+        self.call_from_thread(self._notify_outcome, outcome, text)
 
-    def _notify_outcome(self, outcome: str) -> None:
+    def _notify_outcome(self, outcome: str, text: str) -> None:
+        self._busy_text = text if outcome == "busy" else None
         messages = {
             "sent": "Sent to agent pane",
             "busy": "Agent pane is working. Press again to force, or wait.",
-            "copied": "No agent pane. Prompt copied to clipboard.",
+            "copied": "No agent pane. Prompt copied to clipboard. Press b on an application to pair a pane.",
         }
         self.notify(messages[outcome], severity="warning" if outcome != "sent" else "information")
 

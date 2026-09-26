@@ -30,8 +30,12 @@ def create(jobs: Path, company: str, role: str, url: str | None) -> AppPaths:
     if p.root.exists():
         raise FileExistsError(p.root)
     p.root.mkdir(parents=True)
-    save(p, Application(company=company, role=role, url=url or None, created=date.today().isoformat()))
-    shutil.copy(master_yaml(jobs), p.resume_yaml)
+    try:
+        shutil.copy(master_yaml(jobs), p.resume_yaml)
+        save(p, Application(company=company, role=role, url=url or None, created=date.today().isoformat()))
+    except OSError:
+        shutil.rmtree(p.root)
+        raise
     return p
 
 

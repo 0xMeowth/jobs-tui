@@ -33,11 +33,12 @@ def run(jobs: Path) -> list[Check]:
     for tool, hint in hints.items():
         path = shutil.which(tool)
         checks.append(Check(tool, path is not None, path or hint))
-    checks.append(Check("chrome", Path(CHROME).exists(), CHROME if Path(CHROME).exists() else "install Google Chrome (browser tier of JD import)"))
+    checks.append(Check("chrome", Path(CHROME).exists(), CHROME if Path(CHROME).exists() else "install Google Chrome (browser tier of JD import)", required=False))
     herdr = shutil.which("herdr")
     checks.append(Check("herdr", herdr is not None and os.environ.get("HERDR_ENV") == "1",
                         "running inside herdr" if os.environ.get("HERDR_ENV") == "1" else "not inside herdr; prompts will be copied to the clipboard", required=False))
-    checks.append(Check("nunito", "nunito" in _typst_fonts().lower(), "font found" if "nunito" in _typst_fonts().lower() else "brew install --cask font-nunito"))
+    nunito = "nunito" in _typst_fonts().lower()
+    checks.append(Check("nunito", nunito, "font found" if nunito else "brew install --cask font-nunito"))
     ok = template_typ(jobs).exists() and master_yaml(jobs).exists()
     checks.append(Check("template", ok, str(jobs / "templates") if ok else f"run: jobs-tui init  (JOBS_DIR={jobs})"))
     return checks
