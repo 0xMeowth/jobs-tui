@@ -89,7 +89,8 @@ class RenderScreen(Screen):
         self.app.send_to_agent(bridge.trim_prompt(self.p.root, self.result.pages))
 
     def action_finalize(self) -> None:
-        self.app.notify("Finalize: built in Task 15")
+        from jobs_tui.screens.finalize import FinalizeScreen
+        self.app.push_screen(FinalizeScreen(self.p))
 
     def action_back(self) -> None:
         self.app.pop_screen()

@@ -409,3 +409,36 @@ async def test_render_screen_ignores_superseded_render(jobs_dir, reviewable, mon
         release.set()
         await pilot.pause(0.3)
         assert "Pages       2" in str(info.content) and app.pages == 2
+
+
+async def test_finalize_records_submission(jobs_dir, reviewable, monkeypatch):
+    from datetime import date
+    from jobs_tui import render, tracker
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "FinalizeScreen"
+        await pilot.click("#yes")
+        await pilot.pause()
+    assert reviewable.submitted_pdf.read_bytes() == b"%PDF-1.4 fake"
+    assert application.load(reviewable).submitted_date == date.today().isoformat()
+    rows = tracker.read(paths.tracker_md(jobs_dir))
+    assert rows[0].company == "Acme" and rows[0].folder == "companies/acme/analyst/"
+
+
+async def test_finalize_refuses_three_pages(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    reviewable.resume_pdf.write_bytes(b"%PDF")
+    monkeypatch.setattr(render, "page_count", lambda pdf: 3)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        from textual.widgets import Button
+        assert app.screen.query_one("#yes", Button).disabled
+    assert not reviewable.submitted_pdf.exists()
