@@ -287,12 +287,38 @@ async def test_paired_pane_disappearing_clears_pairing(jobs_dir, monkeypatch):
         await wait_for_options(pilot, select, 1)
         await pilot.pause(0.1)
         assert app.bridge.pane_id == "wK:p1" and select.value == "wK:p1"
+        from jobs_tui import bridge as bridge_mod
         listed.clear()
+        monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: None)
         app.screen.query_one(CommandBar).refresh_panes()
         await wait_for_options(pilot, select, 0)
         await pilot.pause()
         assert app.bridge.pane_id is None
         assert select.is_blank()
+
+
+async def test_transient_list_failure_keeps_pairing(jobs_dir, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    listed = []
+    panes = two_panes(monkeypatch, listed)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        from jobs_tui.app import CommandBar
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        select.value = "wK:p1"
+        await pilot.pause()
+        checked = []
+        monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [])
+        monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: checked.append(pid) or panes[0])
+        app.screen.query_one(CommandBar).refresh_panes()
+        await app.workers.wait_for_complete()
+        await pilot.pause(0.1)
+        assert "wK:p1" in checked
+        assert app.bridge.pane_id == "wK:p1"
+        assert select.value == "wK:p1" and len(select._options) - 1 == 2
 
 
 async def test_pairing_survives_screen_change(jobs_dir, reviewable, monkeypatch):
