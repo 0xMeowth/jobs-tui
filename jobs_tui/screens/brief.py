@@ -53,10 +53,10 @@ class BriefScreen(ModalScreen[str | None]):
         with Vertical(id="dialog"):
             yield Label("[b]Review brief[/b]  What should the agent focus on?")
             yield TextArea(saved_brief(self.p), id="brief")
-            yield Label(f"Agent pane: {pane if pane else 'none. Close this dialog and press p to pair'}")
+            yield Label(f"Agent pane: {pane if pane else 'none (prompt will be copied to clipboard)'}")
             with Horizontal():
                 yield Button("Start review", variant="primary", id="start")
-                yield Button("Save only", id="save")
+                yield Button("Save without sending", id="save")
                 yield Button("Cancel", id="cancel")
 
     def action_cancel(self) -> None:

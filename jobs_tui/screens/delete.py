@@ -19,7 +19,7 @@ class DeleteScreen(ModalScreen[bool]):
         meta = application.load(self.p)
         with Vertical(id="dialog"):
             yield Label(f"[b]Delete application?[/b]  {escape(meta.company)} — {escape(meta.role)}")
-            yield Label(f"This removes the folder {escape(str(self.p.root))} and everything in it.")
+            yield Label(f"This removes companies/{escape(self.p.company_slug)}/{escape(self.p.role_slug)}/ and everything in it.")
             with Horizontal():
                 yield Button("Delete", variant="error", id="yes")
                 yield Button("Keep", id="no")

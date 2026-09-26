@@ -37,10 +37,10 @@ class EditTextScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("[b]Edit proposal[/b]  Saved as accepted with your wording")
+            yield Label("[b]Edit proposal[/b]  Edit the wording, then accept")
             yield TextArea(self.text, id="edit-text")
             with Horizontal():
-                yield Button("Save as accepted", variant="primary", id="ok")
+                yield Button("Accept", variant="primary", id="ok")
                 yield Button("Cancel", id="cancel")
 
     def action_cancel(self) -> None:
@@ -60,10 +60,10 @@ class CommentScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("[b]Feedback for the agent[/b]  Marks this edit needs revision")
+            yield Label("[b]Feedback for the agent[/b]  Marks this edit for revision. s sends all feedback to the agent.")
             yield TextArea(self.text, id="comment")
             with Horizontal():
-                yield Button("Save", variant="primary", id="ok")
+                yield Button("Mark for revision", variant="primary", id="ok")
                 yield Button("Cancel", id="cancel")
 
     def action_cancel(self) -> None:
@@ -161,7 +161,11 @@ class ReviewScreen(Screen):
             lv.index = min(index, len(self.edits) - 1)
             self.show(self.edits[lv.index])
         else:
-            self.query_one("#edit-detail", Static).update("No proposed edits yet. Waiting for the agent to write proposed-edits.json.")
+            if self.p.review_request.exists():
+                msg = "No proposed edits yet. Waiting for the agent to write proposed-edits.json."
+            else:
+                msg = "No edits yet. Press Esc, then b to brief the agent."
+            self.query_one("#edit-detail", Static).update(msg)
 
     def current(self) -> E.Edit | None:
         lv = self.query_one("#edit-list", ListView)
@@ -171,12 +175,20 @@ class ReviewScreen(Screen):
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
         body = word_diff(e.current, e.proposed) if self.show_diff and e.op == "replace" else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
+        head = f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}  · {c['pending']} pending, {c['accepted']} accepted, {c['rejected']} rejected, {c['needs_revision']} need revision"
+        if c["pending"] == 0:
+            head += "\n[b]All decided[/b] · r render · f finalize" + (" · s send feedback" if c["needs_revision"] else "")
+        status = [f"Status: {d.status}"] if d.status != "pending" else []
+        if d.feedback:
+            status.append(f"Feedback: {escape(d.feedback)}")
+        if d.final and d.final != e.proposed:
+            status.append(f"Final: {escape(d.final)}")
         lines = [
-            f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}  · {c['pending']} pending, {c['accepted']} accepted, {c['rejected']} rejected, {c['needs_revision']} need revision", "",
+            head, "",
             f"ALIGNMENT  {escape(', '.join(e.jd_alignment)) or '-'}", "",
             body, "",
             f"[dim]REASON[/dim]\n{escape(e.reason)}", "",
-            f"Status: {d.status}" + (f"\nFeedback: {escape(d.feedback)}" if d.feedback else "") + (f"\nFinal: {escape(d.final)}" if d.final and d.final != e.proposed else ""),
+            "\n".join(status),
         ]
         self.query_one("#edit-detail", Static).update("\n".join(lines))
 

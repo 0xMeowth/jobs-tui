@@ -66,9 +66,7 @@ class RenderScreen(Screen):
         knobs = ", ".join(f"{k}={v}" for k, v in r.knobs.items()) or "defaults"
         lines = [
             f"Pages       {r.pages}  (limit 2)" + ("  [red]over by " + str(over) + "[/red]" if over > 0 else "  [green]ok[/green]"),
-            f"Previews    {escape(', '.join(p.name for p in r.previews)) or '-'}",
             f"Fit knobs   {knobs}",
-            f"PDF         {escape(str(r.pdf))}",
         ]
         if over > 0:
             lines += ["", "Press a to tighten spacing, or t to ask the agent to trim content."]

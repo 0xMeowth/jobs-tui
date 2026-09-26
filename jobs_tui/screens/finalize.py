@@ -9,6 +9,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
 from jobs_tui import application, render, tracker
+from jobs_tui.app import pages_text
 from jobs_tui.paths import AppPaths, tracker_md
 
 
@@ -37,10 +38,10 @@ class FinalizeScreen(ModalScreen[bool]):
         except Exception as err:
             return False, f"Could not read the PDF: {escape(str(err))}"
         if pages > 2:
-            return False, f"Resume has {pages} pages. It must fit 2 before finalizing."
+            return False, f"Resume has {pages_text(pages)}. It must fit 2 before finalizing."
         if self.p.submitted_pdf.exists():
             return False, "This application was already finalized."
-        return True, f"Resume has {pages} pages. Finalizing copies it to resume-submitted.pdf and adds a tracker row."
+        return True, f"Resume has {pages_text(pages)}. Finalizing copies it to resume-submitted.pdf and adds a tracker row."
 
     def action_cancel(self) -> None:
         self.dismiss(False)

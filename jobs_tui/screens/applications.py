@@ -31,7 +31,7 @@ class ApplicationsScreen(Screen):
     ]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter open · b brief · r render · f finalize · t tracker · y edit yaml · x delete · p pair · : agent · q quit", classes="help")
+        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter review · b brief · r render · f finalize · y yaml · x delete · t tracker · p pair · : agent · q quit", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="app-list")
             yield Static("No applications yet. Press n.", id="app-detail")
@@ -84,8 +84,7 @@ class ApplicationsScreen(Screen):
             f"URL         {escape(meta.url or '-')}", "",
             f"JD          {'imported' if s['jd'] else 'missing'}",
             f"Edits       {s['edits_pending']} pending of {s['edits_total']}",
-            f"Pages       {s['pages'] if s['pages'] is not None else 'not rendered'}", "",
-            "[b]Enter[/b] review · [b]b[/b] brief · [b]r[/b] render · [b]f[/b] finalize",
+            f"Pages       {s['pages'] if s['pages'] is not None else 'not rendered'}",
         ]
         self.query_one("#app-detail", Static).update("\n".join(lines))
 

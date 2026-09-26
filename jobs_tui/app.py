@@ -15,12 +15,16 @@ from jobs_tui.bridge import Bridge, Pane, free_text_prompt, pane_label
 from jobs_tui.paths import AppPaths
 
 
+def pages_text(n: int) -> str:
+    return f"{n} page" if n == 1 else f"{n} pages"
+
+
 class CommandBar(Widget):
     def compose(self) -> ComposeResult:
         app: JobsApp = self.app  # type: ignore[assignment]
         options = app.pane_options
         value = app.bridge.pane_id if app.bridge.pane_id in [v for _, v in options] else Select.NULL
-        yield Select(options, value=value, allow_blank=True, prompt="no agent pane (copy to clipboard)", id="agent-pane")
+        yield Select(options, value=value, allow_blank=True, prompt="No agent: prompts copy to clipboard", id="agent-pane")
         yield Static("", id="agent-state")
         yield Input(placeholder=": message to agent", id="agent-input")
 
@@ -95,7 +99,7 @@ class CommandBar(Widget):
         if not self.is_mounted:
             return
         app: JobsApp = self.app  # type: ignore[assignment]
-        parts = [escape(pane.status) if pane else "", f"{app.pages} pages" if app.pages is not None else ""]
+        parts = [escape(pane.status) if pane else "", pages_text(app.pages) if app.pages is not None else ""]
         self.query_one("#agent-state", Static).update(" · ".join(x for x in parts if x))
 
     def on_key(self, event: Key) -> None:

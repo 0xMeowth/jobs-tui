@@ -1178,3 +1178,86 @@ async def test_edit_yaml_rerenders_and_refreshes(jobs_dir, reviewable, monkeypat
         await pilot.pause()
         assert rendered == [reviewable]
         assert app.pages == 3
+
+
+async def test_page_count_is_singular_for_one_page(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(render, "page_count", lambda pdf: 1)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Static
+        state = app.screen.query_one("#agent-state", Static)
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if "page" in str(state.content):
+                break
+        assert str(state.content) == "1 page"
+        await pilot.press("f")
+        await pilot.pause()
+        info = app.screen.query_one("#finalize-info", Static).render().plain
+        assert "1 page." in info and "1 pages" not in info
+
+
+async def test_delete_dialog_shows_relative_folder(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        target = app.current
+        await pilot.press("x")
+        await pilot.pause()
+        from textual.widgets import Label
+        texts = [str(l.content) for l in app.screen.query(Label)]
+        rel = f"companies/{target.company_slug}/{target.role_slug}/"
+        assert any(rel in t for t in texts)
+        assert not any(str(jobs_dir) in t for t in texts)
+
+
+async def test_review_empty_state_depends_on_brief(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Static
+        await pilot.press("enter")
+        await pilot.pause()
+        detail = app.screen.query_one("#edit-detail", Static)
+        assert "b to brief the agent" in detail.render().plain
+        await pilot.press("escape")
+        await pilot.pause()
+        app.current.review_request.write_text("# Resume review request\n\n## User focus\n\nx\n\n## Required output\n\ny\n")
+        await pilot.press("enter")
+        await pilot.pause()
+        detail = app.screen.query_one("#edit-detail", Static)
+        assert "Waiting for the agent" in detail.render().plain
+
+
+async def test_review_shows_next_step_when_all_decided(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Static
+        await pilot.press("enter")
+        await pilot.pause()
+        detail = app.screen.query_one("#edit-detail", Static)
+        plain = detail.render().plain
+        assert "Status: pending" not in plain and "All decided" not in plain
+        await pilot.press("A")
+        await pilot.pause(0.3)
+        plain = detail.render().plain
+        assert "All decided" in plain and "r render" in plain
+
+
+async def test_render_screen_omits_paths(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2, [p.preview_dir / "page-1.png"], {}))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause(0.3)
+        from textual.widgets import Static
+        plain = app.screen.query_one("#render-info", Static).render().plain
+        assert "Pages" in plain and "Previews" not in plain and str(jobs_dir) not in plain
