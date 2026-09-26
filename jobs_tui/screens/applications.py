@@ -24,11 +24,12 @@ class ApplicationsScreen(Screen):
         Binding("f", "finalize", "Finalize"),
         Binding("t", "tracker", "Tracker"),
         Binding("y", "edit_yaml", "Edit YAML"),
+        Binding("x", "delete_app", "Delete"),
         Binding("q", "app.quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter open · b brief · r render · f finalize · t tracker · y edit yaml · p pair · : agent · q quit", classes="help")
+        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter open · b brief · r render · f finalize · t tracker · y edit yaml · x delete · p pair · : agent · q quit", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="app-list")
             yield Static("No applications yet. Press n.", id="app-detail")
@@ -125,6 +126,22 @@ class ApplicationsScreen(Screen):
         if self.app.current:
             from jobs_tui.screens.finalize import FinalizeScreen
             self.app.push_screen(FinalizeScreen(self.app.current), lambda _: self.call_later(self.refresh_list))
+
+    def action_delete_app(self) -> None:
+        p = self.app.current
+        if not p:
+            return
+        if application.load(p).submitted_date:
+            self.app.notify("Cannot delete a submitted application.", severity="warning")
+            return
+        from jobs_tui.screens.delete import DeleteScreen
+
+        def done(deleted: bool | None) -> None:
+            if deleted:
+                self.app.notify(f"Deleted {p.company_slug}/{p.role_slug}")
+            self.call_later(self.refresh_list)
+
+        self.app.push_screen(DeleteScreen(p), done)
 
     def action_tracker(self) -> None:
         from jobs_tui.screens.tracker_screen import TrackerScreen

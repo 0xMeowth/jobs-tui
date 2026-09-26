@@ -64,3 +64,7 @@ def summary(p: AppPaths) -> dict:
         "pages": pages,
         "submitted": load(p).submitted_date,
     }
+
+
+def delete(p: AppPaths) -> None:
+    shutil.rmtree(p.root)

@@ -51,3 +51,9 @@ def test_create_without_master_leaves_no_folder(jobs_dir):
     with pytest.raises(FileNotFoundError):
         application.create(jobs_dir, "A", "B", None)
     assert not paths.app_paths(jobs_dir, "A", "B").root.exists()
+
+
+def test_delete_removes_application_folder(jobs_dir):
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    application.delete(p)
+    assert not p.root.exists()

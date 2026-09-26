@@ -930,3 +930,52 @@ async def test_enter_in_pair_dropdown_pairs_without_opening_review(jobs_dir, two
         assert app.bridge.pane_id == "wK:p1"
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
         assert not select.expanded
+
+
+async def test_x_confirms_then_deletes_draft(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import ListView
+        target = app.current
+        assert target is not None
+        await pilot.press("x")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "DeleteScreen"
+        assert target.root.exists()
+        await pilot.click("#yes")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        assert not target.root.exists()
+        assert len(app.screen.query_one("#app-list", ListView).children) == 1
+        assert app.current is not None and app.current.root != target.root
+
+
+async def test_x_cancel_keeps_draft(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        target = app.current
+        await pilot.press("x")
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        assert target.root.exists()
+
+
+async def test_x_refuses_submitted_application(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        target = app.current
+        meta = application.load(target)
+        meta.submitted_date = "2026-09-01"
+        application.save(target, meta)
+        notices = []
+        app.notify = lambda msg, **kw: notices.append(msg)
+        await pilot.press("x")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        assert target.root.exists()
+        assert any("submitted" in n for n in notices)
