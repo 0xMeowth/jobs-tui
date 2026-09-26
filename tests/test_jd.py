@@ -49,7 +49,11 @@ def test_extract_generic_accepts_real_article():
 
 
 def test_extract_generic_rejects_thin_page():
-    html = "<html><body><nav>" + "menu " * 400 + "</nav><p>Apply now.</p></body></html>"
+    html = (
+        "<html><body><nav><a href='/'>Home</a> <a href='/jobs'>Jobs</a> <a href='/about'>About</a></nav>"
+        "<main><h1>Analyst</h1><p>Apply now via the portal.</p></main>"
+        "<footer>© Example Corp</footer></body></html>"
+    )
     assert jd.extract_generic(html, "https://x", "http") is None
 
 

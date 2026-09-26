@@ -92,7 +92,7 @@ def fetch_browser(url: str, timeout: float = 15) -> str:
 
 
 def extract_generic(html: str, url: str, method: str) -> JD | None:
-    text = trafilatura.extract(html, url=url, include_links=False, favor_precision=True, output_format="markdown") or ""
+    text = trafilatura.extract(html, url=url, include_links=False, favor_recall=True, output_format="markdown") or ""
     text = text.strip()
     try:
         visible = len(LH.fromstring(html).text_content())
