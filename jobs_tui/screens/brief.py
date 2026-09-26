@@ -38,11 +38,11 @@ class BriefScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         pane_id = self.app.bridge.pane_id
-        pane = dict(self.app.pane_options).get(pane_id, pane_id) if pane_id else None
+        pane = {v: label for label, v in self.app.pane_options}.get(pane_id, escape(pane_id)) if pane_id else None
         with Vertical(id="dialog"):
             yield Label("[b]Review brief[/b]  What should the agent focus on?")
             yield TextArea("", id="brief")
-            yield Label(f"Agent pane: {escape(pane) if pane else 'none, press p to pair'}")
+            yield Label(f"Agent pane: {pane if pane else 'none. Close this dialog and press p to pair'}")
             with Horizontal():
                 yield Button("Start review", variant="primary", id="start")
                 yield Button("Save only", id="save")

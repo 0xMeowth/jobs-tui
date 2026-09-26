@@ -26,8 +26,13 @@ class CommandBar(Widget):
     def on_mount(self) -> None:
         self.refresh_panes()
         self.refresh_status()
+        self.app.screen_change_signal.subscribe(self, self._on_screen_change)
         self.set_interval(15, self.refresh_panes)
         self.set_interval(5, self.refresh_status)
+
+    def _on_screen_change(self, screen: object) -> None:
+        if screen is self.screen:
+            self.refresh_panes()
 
     def refresh_panes(self) -> None:
         self.run_worker(self._fetch_panes, thread=True, exclusive=True, group="panes")
@@ -36,28 +41,36 @@ class CommandBar(Widget):
         app: JobsApp = self.app  # type: ignore[assignment]
         herdr = bridge.in_herdr()
         panes = bridge.list_agent_panes() if herdr else []
+        options: list[tuple[str, str]] | None = [(escape(pane_label(p)), p.pane_id) for p in panes]
         paired = app.bridge.pane_id
         gone = None
         if paired and paired not in [p.pane_id for p in panes]:
-            if herdr and bridge.get_pane(paired) is not None:
-                return  # list call failed or raced; keep pairing and old options
-            gone = paired
-        app.call_from_thread(self._show_panes, [(pane_label(p), p.pane_id) for p in panes], gone)
+            alive = bridge.get_pane(paired) if herdr else None
+            if alive is None:
+                gone = paired
+            elif panes:
+                options.append((escape(pane_label(alive)), paired))
+            else:
+                return  # list call failed; keep pairing and old options
+        if not panes:
+            options = None  # keep previous options
+        app.call_from_thread(self._show_panes, options, gone)
 
-    def _show_panes(self, options: list[tuple[str, str]], gone: str | None = None) -> None:
+    def _show_panes(self, options: list[tuple[str, str]] | None, gone: str | None = None) -> None:
         if not self.is_mounted:
             return
         app: JobsApp = self.app  # type: ignore[assignment]
+        if options is None:
+            options = [o for o in app.pane_options if o[1] != gone]
         if app.bridge.pane_id not in [v for _, v in options]:
             if app.bridge.pane_id != gone:
                 return  # pairing changed while the worker ran; wait for the next refresh
             app.bridge.pane_id = None
         app.pane_options = options
         select = self.query_one("#agent-pane", Select)
-        shown = [(escape(label), v) for label, v in options]
-        if shown != select._options[1:] or select.value != (app.bridge.pane_id or Select.NULL):
+        if options != select._options[1:] or select.value != (app.bridge.pane_id or Select.NULL):
             with select.prevent(Select.Changed):
-                select.set_options(shown)
+                select.set_options(options)
                 select.value = app.bridge.pane_id or Select.NULL
         self.refresh_status()
 

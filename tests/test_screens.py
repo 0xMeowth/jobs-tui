@@ -195,11 +195,14 @@ async def test_brief_writes_request_and_sends(jobs_dir, two_apps, monkeypatch):
     app = JobsApp(jobs_dir)
     app.bridge.pane_id = "wK:p1"
     async with app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if app.pane_options:
+                break
         await pilot.press("b")
         await pilot.pause()
         from textual.widgets import Label, TextArea
-        assert any("Agent pane:" in str(l.content) for l in app.screen.query(Label))
+        assert any("Agent pane: codex · jobs · t" in str(l.content) for l in app.screen.query(Label))
         assert not app.screen.query("#pane")
         app.screen.query_one("#brief", TextArea).text = "Focus on analytics leadership."
         await pilot.click("#start")
@@ -319,6 +322,95 @@ async def test_transient_list_failure_keeps_pairing(jobs_dir, monkeypatch):
         assert "wK:p1" in checked
         assert app.bridge.pane_id == "wK:p1"
         assert select.value == "wK:p1" and len(select._options) - 1 == 2
+
+
+async def test_markup_in_pane_title_survives_screen_push(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    pane = bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "fix [/] bug", "jobs")
+    monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
+    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
+    monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane if pid == "wK:p1" else None)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 1)
+        select.value = "wK:p1"
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+        assert app.is_running
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        assert app.screen.query_one("#agent-pane", Select).value == "wK:p1"
+
+
+async def test_new_panes_appear_while_paired_pane_left_agent_list(jobs_dir, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    listed = []
+    two_panes(monkeypatch, listed)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        from jobs_tui.app import CommandBar
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        select.value = "wK:p1"
+        await pilot.pause()
+        shell = bridge_mod.Pane("wK:p1", "", "unknown", "/j", "zsh", "")
+        fresh = bridge_mod.Pane("w9:p3", "claude", "idle", "/n", "New task", "jobs")
+        monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [fresh])
+        monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: shell if pid == "wK:p1" else None)
+        app.screen.query_one(CommandBar).refresh_panes()
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if "w9:p3" in [v for _, v in select._options]:
+                break
+        assert sorted(v for _, v in select._options[1:]) == ["w9:p3", "wK:p1"]
+        assert app.bridge.pane_id == "wK:p1" and select.value == "wK:p1"
+
+
+async def test_empty_list_keeps_options_when_unpaired(jobs_dir, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        from jobs_tui.app import CommandBar
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [])
+        app.screen.query_one(CommandBar).refresh_panes()
+        await app.workers.wait_for_complete()
+        await pilot.pause(0.1)
+        assert len(select._options) - 1 == 2 and select.is_blank()
+
+
+async def test_pairing_on_pushed_screen_shows_after_pop(jobs_dir, reviewable, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        await wait_for_options(pilot, app.screen.query_one("#agent-pane", Select), 2)
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        review_select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, review_select, 2)
+        review_select.value = "w6:p2"
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        select = app.screen.query_one("#agent-pane", Select)
+        for _ in range(10):
+            await pilot.pause(0.05)
+            if select.value == "w6:p2":
+                break
+        assert select.value == "w6:p2"
 
 
 async def test_pairing_survives_screen_change(jobs_dir, reviewable, monkeypatch):
