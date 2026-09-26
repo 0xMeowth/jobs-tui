@@ -125,7 +125,8 @@ class ApplicationsScreen(Screen):
             self.app.push_screen(FinalizeScreen(self.app.current), lambda _: self.call_later(self.refresh_list))
 
     def action_tracker(self) -> None:
-        self.app.notify("Tracker: built in Task 16")
+        from jobs_tui.screens.tracker_screen import TrackerScreen
+        self.app.push_screen(TrackerScreen())
 
     def action_edit_yaml(self) -> None:
         if not self.app.current:

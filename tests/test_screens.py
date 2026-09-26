@@ -484,3 +484,20 @@ async def test_finalize_double_click_records_once(jobs_dir, reviewable, monkeypa
         await pilot.pause()
     assert len(tracker.read(paths.tracker_md(jobs_dir))) == 1
     assert reviewable.submitted_pdf.read_bytes() == b"%PDF-1.4 fake"
+
+
+async def test_tracker_screen_lists_rows(jobs_dir, two_apps):
+    from jobs_tui import tracker
+    tracker.insert(paths.tracker_md(jobs_dir), tracker.Row("2026-09-26", "Northwind", "AI Analyst", "companies/northwind/ai-analyst/", "https://x/1", ""))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        from textual.widgets import DataTable
+        table = app.screen.query_one("#tracker-table", DataTable)
+        assert table.row_count == 1
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        assert app.current.root == jobs_dir / "companies" / "northwind" / "ai-analyst"
