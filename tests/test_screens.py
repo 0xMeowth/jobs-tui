@@ -187,17 +187,20 @@ async def test_brief_writes_request_and_sends(jobs_dir, two_apps, monkeypatch):
     from jobs_tui import bridge as bridge_mod
     monkeypatch.setenv("HERDR_ENV", "1")
     monkeypatch.setattr(bridge_mod.shutil, "which", lambda n: "/x/herdr")
-    pane = bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "t")
+    pane = bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "t", "jobs")
     monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
     monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane if pid == "wK:p1" else None)
     sent = []
     monkeypatch.setattr(bridge_mod, "run_in_pane", lambda pid, text: sent.append((pid, text)))
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("b")
         await pilot.pause()
-        from textual.widgets import TextArea
+        from textual.widgets import Label, TextArea
+        assert any("Agent pane:" in str(l.content) for l in app.screen.query(Label))
+        assert not app.screen.query("#pane")
         app.screen.query_one("#brief", TextArea).text = "Focus on analytics leadership."
         await pilot.click("#start")
         await pilot.pause()
@@ -207,6 +210,106 @@ async def test_brief_writes_request_and_sends(jobs_dir, two_apps, monkeypatch):
     assert "Focus on analytics leadership." in req and "jd.md" in req and "proposed-edits.json" in req
     assert sent and sent[0][0] == "wK:p1" and str(a.root) in sent[0][1]
     assert app.bridge.pane_id == "wK:p1"
+
+
+def two_panes(monkeypatch, listed):
+    from jobs_tui import bridge as bridge_mod
+    panes = [
+        bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "Improve resume bullets", "jobs"),
+        bridge_mod.Pane("w6:p2", "claude", "working", "/c", "Draft cover letter", "cv rewriting"),
+    ]
+    listed.extend(panes)
+    monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
+    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: list(listed))
+    monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: next((p for p in listed if p.pane_id == pid), None))
+    return panes
+
+
+async def wait_for_options(pilot, select, n):
+    for _ in range(30):
+        await pilot.pause(0.05)
+        if len(select._options) - 1 == n:
+            break
+    assert len(select._options) - 1 == n
+
+
+async def test_command_bar_lists_panes_and_pairs(jobs_dir, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select, Static
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        assert any("codex · jobs · Improve" in str(label) for label, _ in select._options)
+        select.value = "wK:p1"
+        await pilot.pause()
+        assert app.bridge.pane_id == "wK:p1"
+        state = app.screen.query_one("#agent-state", Static)
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if "idle" in str(state.content):
+                break
+        assert "idle" in str(state.content)
+
+
+async def test_p_focuses_pair_select(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("p")
+        await pilot.pause()
+        from textual.widgets import Select
+        select = app.screen.query_one("#agent-pane", Select)
+        assert select.has_focus
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not select.has_focus
+        assert app.is_running
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
+async def test_paired_pane_disappearing_clears_pairing(jobs_dir, monkeypatch):
+    listed = []
+    two_panes(monkeypatch, listed)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        from jobs_tui.app import CommandBar
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        select.value = "wK:p1"
+        await pilot.pause()
+        assert app.bridge.pane_id == "wK:p1"
+        listed.pop()
+        app.screen.query_one(CommandBar).refresh_panes()
+        await wait_for_options(pilot, select, 1)
+        await pilot.pause(0.1)
+        assert app.bridge.pane_id == "wK:p1" and select.value == "wK:p1"
+        listed.clear()
+        app.screen.query_one(CommandBar).refresh_panes()
+        await wait_for_options(pilot, select, 0)
+        await pilot.pause()
+        assert app.bridge.pane_id is None
+        assert select.is_blank()
+
+
+async def test_pairing_survives_screen_change(jobs_dir, reviewable, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        select.value = "wK:p1"
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause(0.3)
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        assert app.bridge.pane_id == "wK:p1"
+        assert app.screen.query_one("#agent-pane", Select).value == "wK:p1"
 
 
 SAMPLE_EDITS = {"edits": [
@@ -539,6 +642,7 @@ async def test_send_twice_to_busy_pane_forces(jobs_dir, monkeypatch):
     monkeypatch.setenv("HERDR_ENV", "1")
     monkeypatch.setattr(bridge_mod.shutil, "which", lambda n: "/x/herdr")
     pane = bridge_mod.Pane("wK:p1", "codex", "working", "/j", "t")
+    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
     monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane if pid == "wK:p1" else None)
     sent = []
     monkeypatch.setattr(bridge_mod, "run_in_pane", lambda pid, text: sent.append((pid, text)))
@@ -567,7 +671,7 @@ async def test_no_pane_notify_explains_pairing(jobs_dir, monkeypatch):
         app.send_to_agent("hello")
         await app.workers.wait_for_complete()
         await pilot.pause()
-    assert "No agent pane. Prompt copied to clipboard. Press b on an application to pair a pane." in notes
+    assert "No agent pane. Prompt copied to clipboard. Press p to pair a pane." in notes
 
 
 async def test_applications_detail_shows_markup_literally(jobs_dir):
@@ -675,3 +779,17 @@ async def test_edit_yaml_splits_editor_command(jobs_dir, reviewable, monkeypatch
         await pilot.press("y")
         await pilot.pause()
     assert calls == [["code", "--wait", str(reviewable.resume_yaml)]]
+
+
+async def test_review_p_still_renders(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        await pilot.press("p")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "RenderScreen"

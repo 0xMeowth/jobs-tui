@@ -6,9 +6,13 @@ import pytest
 from jobs_tui import bridge
 
 LIST = {"result": {"panes": [
-    {"pane_id": "w6:p1", "agent": "claude", "agent_status": "working", "cwd": "/a", "terminal_title_stripped": "t1"},
-    {"pane_id": "wK:p1", "agent": "codex", "agent_status": "idle", "cwd": "/b", "terminal_title_stripped": "t2"},
+    {"pane_id": "w6:p1", "workspace_id": "w6", "agent": "claude", "agent_status": "working", "cwd": "/a", "terminal_title_stripped": "t1"},
+    {"pane_id": "wK:p1", "workspace_id": "wK", "agent": "codex", "agent_status": "idle", "cwd": "/b", "terminal_title_stripped": "t2"},
     {"pane_id": "w1:p1", "cwd": "/c", "agent_status": "unknown", "terminal_title_stripped": "shell"},
+]}}
+WORKSPACES = {"result": {"workspaces": [
+    {"workspace_id": "w6", "label": "cv rewriting"},
+    {"workspace_id": "wK", "label": "jobs"},
 ]}}
 GET = {"result": {"pane": {"pane_id": "wK:p1", "agent": "codex", "agent_status": "idle", "cwd": "/b", "terminal_title_stripped": "t2"}}}
 
@@ -20,6 +24,8 @@ def fake_run(monkeypatch):
         calls.append(args)
         if args[:2] == ["pane", "list"]:
             return json.dumps(LIST)
+        if args[:2] == ["workspace", "list"]:
+            return json.dumps(WORKSPACES)
         if args[:2] == ["pane", "get"]:
             return json.dumps(GET) if args[2] == "wK:p1" else (_ for _ in ()).throw(RuntimeError("not found"))
         return ""
@@ -38,6 +44,32 @@ def test_in_herdr(monkeypatch):
 def test_list_agent_panes_filters(fake_run):
     panes = bridge.list_agent_panes()
     assert [(p.pane_id, p.agent, p.status) for p in panes] == [("w6:p1", "claude", "working"), ("wK:p1", "codex", "idle")]
+
+
+def test_list_agent_panes_fills_workspace(fake_run):
+    panes = bridge.list_agent_panes()
+    assert panes[0].workspace == "cv rewriting"
+    assert panes[1].workspace == "jobs"
+
+
+def test_list_agent_panes_without_workspaces(fake_run, monkeypatch):
+    real = bridge._run
+    def _run(args):
+        if args[:2] == ["workspace", "list"]:
+            raise RuntimeError("boom")
+        return real(args)
+    monkeypatch.setattr(bridge, "_run", _run)
+    panes = bridge.list_agent_panes()
+    assert [p.pane_id for p in panes] == ["w6:p1", "wK:p1"]
+    assert all(p.workspace == "" for p in panes)
+
+
+def test_pane_label():
+    long = "Improve the resume bullets for the analytics role at Northwind"
+    p = bridge.Pane("wK:p1", "codex", "idle", "/b", long, "jobs")
+    assert bridge.pane_label(p) == "codex · jobs · " + long[:39] + "…"
+    assert bridge.pane_label(bridge.Pane("x", "claude", "idle", "/", "short", "")) == "claude · short"
+    assert bridge.pane_label(bridge.Pane("x", "claude", "idle", "/", "", "ws")) == "claude · ws"
 
 
 def test_get_pane(fake_run):

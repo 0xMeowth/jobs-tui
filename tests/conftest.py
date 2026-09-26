@@ -16,4 +16,5 @@ def jobs_dir(tmp_path, monkeypatch) -> Path:
     if (ASSETS / "resume-example.yaml").exists():
         shutil.copy(ASSETS / "resume-example.yaml", jobs / "templates" / "resume-master.yaml")
     monkeypatch.setenv("JOBS_DIR", str(jobs))
+    monkeypatch.setenv("HERDR_ENV", "0")
     return jobs

@@ -16,6 +16,7 @@ class Pane:
     status: str
     cwd: str
     title: str
+    workspace: str = ""
 
 
 def _run(args: list[str]) -> str:
@@ -36,12 +37,29 @@ def _pane(d: dict) -> Pane:
     return Pane(d["pane_id"], d.get("agent", ""), d.get("agent_status", "unknown"), d.get("cwd", ""), d.get("terminal_title_stripped", ""))
 
 
+def _workspace_labels() -> dict[str, str]:
+    try:
+        workspaces = json.loads(_run(["workspace", "list"]))["result"]["workspaces"]
+        return {w["workspace_id"]: w.get("label", "") for w in workspaces}
+    except Exception:
+        return {}
+
+
 def list_agent_panes() -> list[Pane]:
     try:
-        panes = json.loads(_run(["pane", "list"]))["result"]["panes"]
-        return [_pane(p) for p in panes if p.get("agent") in AGENTS]
+        raw = [d for d in json.loads(_run(["pane", "list"]))["result"]["panes"] if d.get("agent") in AGENTS]
+        panes = [(_pane(d), d.get("workspace_id", "")) for d in raw]
     except Exception:
         return []
+    labels = _workspace_labels()
+    for pane, ws in panes:
+        pane.workspace = labels.get(ws, "")
+    return [pane for pane, _ in panes]
+
+
+def pane_label(p: Pane) -> str:
+    title = p.title if len(p.title) <= 40 else p.title[:39] + "…"
+    return " · ".join(x for x in (p.agent, p.workspace, title) if x)
 
 
 def get_pane(pane_id: str) -> Pane | None:

@@ -18,7 +18,7 @@ Replace `$JOBS_DIR/templates/resume-master.yaml` with your own content. Styling 
 
     uv run jobs-tui
 
-Open it in a herdr pane next to your Codex or Claude pane. Keys are listed at the top of every screen. `:` sends a message to the paired agent pane.
+Open it in a herdr pane next to your Codex or Claude pane. Keys are listed at the top of every screen. `p` picks the agent pane to pair with (on the review screen `p` renders, so click the pane box instead). `:` sends a message to the paired agent pane.
 
 ## Files per application
 
