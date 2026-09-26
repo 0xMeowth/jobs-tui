@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from rich.markup import escape
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -6,15 +8,16 @@ from textual.widgets import DataTable, Static
 
 from jobs_tui import tracker
 from jobs_tui.app import CommandBar
-from jobs_tui.paths import AppPaths, tracker_md
+from jobs_tui.paths import tracker_md
 
 
-class TrackerScreen(Screen):
+class TrackerScreen(Screen[Path | None]):
     AUTO_FOCUS = ""
     BINDINGS = [Binding("escape", "back", "Back")]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]TRACKER[/b]  submitted applications · Enter open · Esc back", classes="help")
+        yield Static("[b]TRACKER[/b]  submitted applications · Enter select · Esc back", classes="help")
+        yield Static("No submitted applications yet. Finalize one with f.", id="tracker-empty")
         yield DataTable(id="tracker-table", cursor_type="row")
         yield CommandBar()
 
@@ -22,6 +25,8 @@ class TrackerScreen(Screen):
         table = self.query_one("#tracker-table", DataTable)
         table.add_columns("Submitted", "Company", "Role", "Folder", "URL", "Notes")
         self.rows = tracker.read(tracker_md(self.app.jobs))
+        self.query_one("#tracker-empty", Static).display = not self.rows
+        table.display = bool(self.rows)
         for i, r in enumerate(self.rows):
             table.add_row(
                 escape(r.submitted),
@@ -36,8 +41,7 @@ class TrackerScreen(Screen):
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         folder = self.rows[int(event.row_key.value)].folder.rstrip("/")
-        from jobs_tui.screens.review import ReviewScreen
-        self.app.push_screen(ReviewScreen(AppPaths(self.app.jobs / folder)))
+        self.dismiss(self.app.jobs / folder)
 
     def action_back(self) -> None:
-        self.app.pop_screen()
+        self.dismiss(None)

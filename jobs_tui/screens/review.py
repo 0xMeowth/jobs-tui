@@ -249,7 +249,10 @@ class ReviewScreen(Screen):
 
     def action_edit(self) -> None:
         e = self.current()
-        if not e or e.op == "remove" or self.accepted(e):
+        if not e or self.accepted(e):
+            return
+        if e.op == "remove":
+            self.app.notify("Remove edits can't be reworded")
             return
         self.app.push_screen(EditTextScreen(e.proposed), lambda text: text is not None and self.apply(e, text))
 
@@ -279,6 +282,9 @@ class ReviewScreen(Screen):
         self.rerender()
 
     def action_send_feedback(self) -> None:
+        if not E.counts(self.edits, self.decisions)["needs_revision"]:
+            self.app.notify("No edits marked for revision. Press c on an edit first.")
+            return
         self.app.send_to_agent(bridge.feedback_prompt(self.p.root))
 
     def action_render(self) -> None:

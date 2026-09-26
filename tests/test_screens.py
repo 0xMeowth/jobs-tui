@@ -726,7 +726,7 @@ async def test_tracker_screen_lists_rows(jobs_dir, two_apps):
         assert table.row_count == 1
         await pilot.press("enter")
         await pilot.pause()
-        assert app.screen.__class__.__name__ == "ReviewScreen"
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
         assert app.current.root == jobs_dir / "companies" / "northwind" / "ai-analyst"
 
 
@@ -745,7 +745,7 @@ async def test_tracker_screen_handles_duplicate_folder(jobs_dir, two_apps):
         assert table.row_count == 2
         await pilot.press("enter")
         await pilot.pause()
-        assert app.screen.__class__.__name__ == "ReviewScreen"
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
         assert app.current.root == jobs_dir / "companies" / "northwind" / "ai-analyst"
 
 
@@ -1261,3 +1261,59 @@ async def test_render_screen_omits_paths(jobs_dir, reviewable, monkeypatch):
         from textual.widgets import Static
         plain = app.screen.query_one("#render-info", Static).render().plain
         assert "Pages" in plain and "Previews" not in plain and str(jobs_dir) not in plain
+
+
+async def test_tracker_shows_empty_state(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        from textual.widgets import Static
+        assert any("No submitted applications" in str(w.content) for w in app.screen.query(Static))
+
+
+async def test_send_feedback_with_nothing_to_revise_notifies(jobs_dir, reviewable, monkeypatch):
+    sent = []
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: sent.append(text))
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause()
+    assert sent == []
+    assert any("revision" in n for n in notices)
+
+
+async def test_edit_on_remove_edit_notifies(jobs_dir):
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [{"id": "e1", "op": "remove", "path": "acme.b1", "current": "x", "proposed": "", "reason": "cut"}]}))
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+    assert any("reword" in n for n in notices)
+
+
+async def test_enter_in_company_moves_to_role(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, Static
+        await pilot.press(*"Acme", "enter")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "NewApplicationScreen"
+        assert app.screen.query_one("#role", Input).has_focus
+        assert app.screen.query_one("#new-status", Static).render().plain == ""

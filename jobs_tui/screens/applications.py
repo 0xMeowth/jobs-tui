@@ -159,7 +159,7 @@ class ApplicationsScreen(Screen):
 
     def action_tracker(self) -> None:
         from jobs_tui.screens.tracker_screen import TrackerScreen
-        self.app.push_screen(TrackerScreen())
+        self.app.push_screen(TrackerScreen(), lambda root: self.call_later(self.refresh_list, root))
 
     def action_edit_yaml(self) -> None:
         if not self.app.current:

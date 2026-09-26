@@ -38,6 +38,11 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         event.stop()
+        for field in ("company", "role"):
+            box = self.query_one(f"#{field}", Input)
+            if not box.value.strip():
+                box.focus()
+                return
         if not self.query_one("#create", Button).disabled:
             self.create()
 
