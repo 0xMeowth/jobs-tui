@@ -30,11 +30,12 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel":
-            self.dismiss(None)
+            self.action_cancel()
         elif event.button.id == "create":
             self.create()
 
     def action_cancel(self) -> None:
+        self.workers.cancel_group(self, "fetch")
         self.dismiss(None)
 
     def create(self) -> None:
@@ -66,16 +67,22 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
         self.query_one("#create", Button).disabled = True
         self.fetch(url, self.created)
 
-    @work(thread=True, exclusive=True)
+    @work(thread=True, exclusive=True, group="fetch")
     def fetch(self, url: str, p: AppPaths) -> None:
+        app = self.app
         try:
             jd.import_url(url, p)
         except jd.JDError as e:
-            self.app.call_from_thread(self.fetch_failed, str(e))
+            app.call_from_thread(self._fetch_done, None, str(e))
             return
-        self.app.call_from_thread(self.dismiss, p)
+        app.call_from_thread(self._fetch_done, p, None)
 
-    def fetch_failed(self, message: str) -> None:
-        self.query_one("#new-status", Static).update(f"{message} Paste the description below and press Create.")
+    def _fetch_done(self, result: AppPaths | None, error: str | None) -> None:
+        if not self.is_current:
+            return
+        if result is not None:
+            self.dismiss(result)
+            return
+        self.query_one("#new-status", Static).update(f"{error} Paste the description below and press Create.")
         self.query_one("#create", Button).disabled = False
         self.query_one("#paste", TextArea).focus()

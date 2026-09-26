@@ -35,7 +35,7 @@ class ApplicationsScreen(Screen):
     async def on_screen_resume(self) -> None:
         await self.refresh_list()
 
-    async def refresh_list(self) -> None:
+    async def refresh_list(self, select: Path | None = None) -> None:
         lv = self.query_one("#app-list", ListView)
         keep = lv.index or 0
         await lv.clear()
@@ -56,7 +56,8 @@ class ApplicationsScreen(Screen):
             self.app.notify(f"Skipped unreadable application.json: {', '.join(bad)}", severity="warning")
         await lv.extend(items)
         if self.apps:
-            lv.index = min(keep, len(self.apps) - 1)
+            roots = [p.root for p in self.apps]
+            lv.index = roots.index(select) if select in roots else min(keep, len(self.apps) - 1)
             self.show_detail(self.apps[lv.index])
         else:
             self.app.current = None
@@ -93,7 +94,7 @@ class ApplicationsScreen(Screen):
         from jobs_tui.screens.new_application import NewApplicationScreen
 
         def done(p: AppPaths | None) -> None:
-            self.call_later(self.refresh_list)
+            self.call_later(self.refresh_list, p.root if p else None)
             if p is not None:
                 self.app.current = p
                 self.app.notify(f"Created {p.company_slug}/{p.role_slug}")

@@ -62,9 +62,11 @@ async def test_command_bar_submit_copies_when_no_pane(jobs_dir, monkeypatch):
     assert copied == ["hello"]
 
 
-async def test_new_application_creates_and_imports_pasted_jd(jobs_dir):
+async def test_new_application_creates_and_imports_pasted_jd(jobs_dir, two_apps):
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("down")
         await pilot.pause()
         await pilot.press("n")
         await pilot.pause()
@@ -77,7 +79,9 @@ async def test_new_application_creates_and_imports_pasted_jd(jobs_dir):
             await pilot.pause(0.1)
             if app.screen.__class__.__name__ == "ApplicationsScreen":
                 break
-    p = paths.app_paths(jobs_dir, "Acme", "Analyst")
+        await pilot.pause(0.1)
+        p = paths.app_paths(jobs_dir, "Acme", "Analyst")
+        assert app.current is not None and app.current.root == p.root
     assert p.meta.exists()
     assert "We need an analyst" in p.jd_md.read_text()
 
@@ -100,6 +104,10 @@ async def test_new_application_url_import_error_keeps_dialog(jobs_dir, monkeypat
             if "blocked" in str(app.screen.query_one("#new-status", Static).content):
                 break
         assert app.screen.__class__.__name__ == "NewApplicationScreen"
+        from textual.widgets import Button, TextArea
+        assert "blocked" in str(app.screen.query_one("#new-status", Static).content)
+        assert not app.screen.query_one("#create", Button).disabled
+        assert app.screen.query_one("#paste", TextArea).has_focus
     assert paths.app_paths(jobs_dir, "Acme", "PM").meta.exists()
 
 
@@ -126,7 +134,11 @@ async def test_colon_on_modal_does_not_crash(jobs_dir):
         await pilot.pause()
         await pilot.press("n")
         await pilot.pause()
+        app.screen.set_focus(None)
+        await pilot.pause()
         await pilot.press("colon")
+        await pilot.pause()
+        app.action_focus_bar()
         await pilot.pause()
         assert app.is_running
         assert app.screen.__class__.__name__ == "NewApplicationScreen"
@@ -142,3 +154,28 @@ async def test_escape_leaves_command_bar(jobs_dir):
         await pilot.pause()
         from textual.widgets import Input
         assert not app.screen.query_one("#agent-input", Input).has_focus
+
+
+async def test_cancel_during_url_fetch_returns_to_list(jobs_dir, monkeypatch):
+    import threading
+    from jobs_tui import jd
+    release = threading.Event()
+    monkeypatch.setattr(jd, "import_url", lambda url, p: release.wait(2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input
+        app.screen.query_one("#company", Input).value = "Acme"
+        app.screen.query_one("#role", Input).value = "PM"
+        app.screen.query_one("#url", Input).value = "https://careers.example.com/1"
+        await pilot.click("#create")
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        release.set()
+        await pilot.pause(0.3)
+        assert app.is_running
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
