@@ -88,7 +88,7 @@ def fetch_browser(url: str, timeout: float = 15) -> str:
     try:
         with sync_playwright() as pw:
             remaining = max(0.0, deadline - time.monotonic())
-            browser = pw.chromium.launch(channel="chrome", headless=True, timeout=remaining * 1000)
+            browser = pw.chromium.launch(channel="chrome", headless=True, timeout=max(1000, remaining * 1000))
             page = browser.new_page()
             remaining = max(0.0, deadline - time.monotonic())
             page.goto(url, wait_until="domcontentloaded", timeout=max(1000, (remaining - 3) * 1000))
