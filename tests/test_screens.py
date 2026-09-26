@@ -911,3 +911,22 @@ async def test_review_p_still_renders(jobs_dir, reviewable, monkeypatch):
         await pilot.press("p")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "RenderScreen"
+
+
+async def test_enter_in_pair_dropdown_pairs_without_opening_review(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Select
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        await pilot.press("p")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert select.expanded, "Enter on the closed dropdown should open it"
+        await pilot.press("down", "enter")
+        await pilot.pause()
+        assert app.bridge.pane_id == "wK:p1"
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        assert not select.expanded

@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Input, Label, ListItem, ListView, Static
+from textual.widgets import Label, ListItem, ListView, Static
 
 from jobs_tui import application
 from jobs_tui.app import CommandBar
@@ -91,7 +91,7 @@ class ApplicationsScreen(Screen):
             self.show_detail(AppPaths(Path(event.item.name)))
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if action == "open_app" and isinstance(self.focused, Input):
+        if action == "open_app" and self.focused is not None and any(isinstance(w, CommandBar) for w in self.focused.ancestors_with_self):
             return False
         return True
 
