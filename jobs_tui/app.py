@@ -80,6 +80,7 @@ class CommandBar(Widget):
         app: JobsApp = self.app  # type: ignore[assignment]
         app.bridge.pane_id = None if event.value is Select.NULL else str(event.value)
         self.refresh_status()
+        app.leave_bar()
 
     def refresh_status(self) -> None:
         self.run_worker(self._fetch_status, thread=True, exclusive=True, group="status")
@@ -99,7 +100,7 @@ class CommandBar(Widget):
     def on_key(self, event: Key) -> None:
         if event.key == "escape" and (self.query_one("#agent-input", Input).has_focus or self.query_one("#agent-pane", Select).has_focus):
             event.stop()
-            self.screen.set_focus(None)
+            self.app.leave_bar()  # type: ignore[attr-defined]
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         app: JobsApp = self.app  # type: ignore[assignment]
@@ -107,7 +108,7 @@ class CommandBar(Widget):
         event.input.value = ""
         if text:
             app.send_to_agent(free_text_prompt(app.current.root if app.current else None, text))
-        app.screen.set_focus(None)
+        app.leave_bar()
 
 
 class JobsApp(App):
@@ -122,22 +123,34 @@ class JobsApp(App):
         self.current: AppPaths | None = None
         self.pages: int | None = None
         self._busy_text: str | None = None
+        self._before_bar: Widget | None = None
 
     def on_mount(self) -> None:
         from jobs_tui.screens.applications import ApplicationsScreen
         self.push_screen(ApplicationsScreen())
 
-    def action_focus_bar(self) -> None:
+    def _enter_bar(self, selector: str) -> None:
         try:
-            self.screen.query("#agent-input").first().focus()
+            target = self.screen.query(selector).first()
         except NoMatches:
             return
+        focused = self.screen.focused
+        if focused is not None and not any(isinstance(w, CommandBar) for w in focused.ancestors_with_self):
+            self._before_bar = focused
+        target.focus()
+
+    def leave_bar(self) -> None:
+        before, self._before_bar = self._before_bar, None
+        if before is not None and before.is_mounted and before.screen is self.screen:
+            before.focus()
+        else:
+            self.screen.set_focus(None)
+
+    def action_focus_bar(self) -> None:
+        self._enter_bar("#agent-input")
 
     def action_focus_pair(self) -> None:
-        try:
-            self.screen.query("#agent-pane").first().focus()
-        except NoMatches:
-            return
+        self._enter_bar("#agent-pane")
 
     def send_to_agent(self, text: str, force: bool = False) -> None:
         force = force or (text == self._busy_text)

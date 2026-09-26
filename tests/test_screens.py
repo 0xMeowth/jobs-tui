@@ -1017,3 +1017,38 @@ async def test_new_application_reuses_existing_company(jobs_dir, two_apps):
         assert p.meta.exists()
         assert application.load(p).company == "Fabrikam"
         assert not (jobs_dir / "companies" / "fab-rikam").exists()
+
+
+async def test_list_keeps_focus_after_command_bar(jobs_dir, two_apps, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    monkeypatch.setattr(bridge_mod, "copy_to_clipboard", lambda t: None)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import ListView
+        lv = app.screen.query_one("#app-list", ListView)
+        assert lv.index == 0
+        await pilot.press("p")
+        await pilot.press("escape")
+        await pilot.pause()
+        assert lv.has_focus
+        await pilot.press("colon", *"hi", "enter")
+        await pilot.pause()
+        assert lv.has_focus
+        await pilot.press("down")
+        await pilot.pause()
+        assert lv.index == 1
+
+
+async def test_picking_pane_returns_focus_to_list(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import ListView, Select
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        await pilot.press("p", "enter", "down", "enter")
+        await pilot.pause()
+        assert app.bridge.pane_id == "wK:p1"
+        assert app.screen.query_one("#app-list", ListView).has_focus
