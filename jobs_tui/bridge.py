@@ -89,14 +89,15 @@ def feedback_prompt(root: Path) -> str:
     return (
         f"Read review-feedback.json in {root}. Revise only the edits whose status is needs_revision, "
         "using my feedback, and rewrite proposed-edits.json keeping every other edit unchanged. "
-        "Do not edit resume.yaml."
+        "Give revised edits new ids not already in review-feedback.json. Do not edit resume.yaml."
     )
 
 
 def trim_prompt(root: Path, pages: int) -> str:
     return (
         f"The resume in {root} renders to {pages} pages and must fit 2. Propose trims or merges of bullets in "
-        "resume.yaml as edits in proposed-edits.json. Do not edit resume.yaml."
+        "resume.yaml as edits in proposed-edits.json, using ids not already in review-feedback.json. "
+        "Do not edit resume.yaml."
     )
 
 

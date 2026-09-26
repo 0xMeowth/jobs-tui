@@ -133,3 +133,9 @@ def test_prompts_mention_folder_and_files():
     assert "3 pages" in t and "resume.yaml" in t
     assert bridge.free_text_prompt(root, "shorten b2") == f"Regarding {root}: shorten b2"
     assert bridge.free_text_prompt(None, "hi") == "hi"
+
+
+def test_new_round_prompts_require_fresh_ids():
+    root = Path("/j/companies/northwind/analyst")
+    for text in (bridge.trim_prompt(root, 3), bridge.feedback_prompt(root)):
+        assert "ids not already in review-feedback.json" in text
