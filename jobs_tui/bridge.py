@@ -19,7 +19,10 @@ class Pane:
 
 
 def _run(args: list[str]) -> str:
-    proc = subprocess.run(["herdr", *args], capture_output=True, text=True)
+    try:
+        proc = subprocess.run(["herdr", *args], capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("herdr timed out")
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or f"herdr {' '.join(args)} failed")
     return proc.stdout
@@ -34,8 +37,11 @@ def _pane(d: dict) -> Pane:
 
 
 def list_agent_panes() -> list[Pane]:
-    panes = json.loads(_run(["pane", "list"]))["result"]["panes"]
-    return [_pane(p) for p in panes if p.get("agent") in AGENTS]
+    try:
+        panes = json.loads(_run(["pane", "list"]))["result"]["panes"]
+        return [_pane(p) for p in panes if p.get("agent") in AGENTS]
+    except Exception:
+        return []
 
 
 def get_pane(pane_id: str) -> Pane | None:
@@ -63,8 +69,9 @@ def start_review_prompt(root: Path) -> str:
 
 def feedback_prompt(root: Path) -> str:
     return (
-        f"Read review-feedback.json in {root}. Revise the edits whose status is needs_revision using my feedback, "
-        "and rewrite proposed-edits.json. Do not edit resume.yaml."
+        f"Read review-feedback.json in {root}. Revise only the edits whose status is needs_revision, "
+        "using my feedback, and rewrite proposed-edits.json keeping every other edit unchanged. "
+        "Do not edit resume.yaml."
     )
 
 
@@ -95,5 +102,9 @@ class Bridge:
             return "copied"
         if pane.status not in READY and not force:
             return "busy"
-        run_in_pane(pane.pane_id, text)
+        try:
+            run_in_pane(pane.pane_id, text)
+        except (RuntimeError, OSError):
+            copy_to_clipboard(text)
+            return "copied"
         return "sent"

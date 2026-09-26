@@ -63,6 +63,26 @@ def test_deliver_busy_when_working_unless_forced(fake_run, monkeypatch):
     assert b.deliver("x", force=True) == "sent"
 
 
+def test_deliver_copies_when_run_fails(fake_run, monkeypatch):
+    monkeypatch.setenv("HERDR_ENV", "1")
+    monkeypatch.setattr(bridge.shutil, "which", lambda n: "/x/herdr")
+    def boom(pane_id, text):
+        raise RuntimeError("gone")
+    monkeypatch.setattr(bridge, "run_in_pane", boom)
+    copied = []
+    monkeypatch.setattr(bridge, "copy_to_clipboard", lambda t: copied.append(t))
+    b = bridge.Bridge(pane_id="wK:p1")
+    assert b.deliver("hello") == "copied"
+    assert copied == ["hello"]
+
+
+def test_list_agent_panes_returns_empty_on_failure(monkeypatch):
+    def boom(args):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(bridge, "_run", boom)
+    assert bridge.list_agent_panes() == []
+
+
 def test_deliver_copies_when_no_pane(monkeypatch):
     monkeypatch.setenv("HERDR_ENV", "0")
     copied = []
