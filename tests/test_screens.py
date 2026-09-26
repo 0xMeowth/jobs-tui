@@ -380,3 +380,32 @@ async def test_render_screen_shows_pages_and_autofit(jobs_dir, reviewable, monke
         await pilot.press("t")
         await pilot.pause()
     assert sent and "must fit 2" in sent[0]
+
+
+async def test_render_screen_ignores_superseded_render(jobs_dir, reviewable, monkeypatch):
+    import threading
+    from jobs_tui import render
+    release = threading.Event()
+
+    def slow_render(jobs, p):
+        release.wait(5)
+        return render.RenderResult(p.resume_pdf, 3, [], {})
+
+    monkeypatch.setattr(render, "render", slow_render)
+    monkeypatch.setattr(render, "autofit", lambda jobs, p: render.RenderResult(p.resume_pdf, 2, [], render.LADDER[1]))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause()
+        from textual.widgets import Static
+        info = app.screen.query_one("#render-info", Static)
+        await pilot.press("f")
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if "Pages       2" in str(info.content):
+                break
+        assert "Pages       2" in str(info.content)
+        release.set()
+        await pilot.pause(0.3)
+        assert "Pages       2" in str(info.content) and app.pages == 2

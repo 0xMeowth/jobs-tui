@@ -26,6 +26,7 @@ class RenderScreen(Screen):
         super().__init__()
         self.p = p
         self.result: render.RenderResult | None = None
+        self._gen = 0
 
     def compose(self) -> ComposeResult:
         yield Static("[b]RENDER[/b]  o open PDF · f auto-fit · t ask agent to trim · n finalize · Esc back", classes="help")
@@ -36,15 +37,27 @@ class RenderScreen(Screen):
         self.app.current = self.p
         self.run_render(False)
 
-    @work(thread=True, exclusive=True, group="render")
     def run_render(self, fit: bool) -> None:
+        self._gen += 1
+        self._render_worker(fit, self._gen)
+
+    @work(thread=True, exclusive=True, group="render")
+    def _render_worker(self, fit: bool, gen: int) -> None:
         try:
             r = render.autofit(self.app.jobs, self.p) if fit else render.render(self.app.jobs, self.p)
         except render.RenderError as err:
-            self.app.call_from_thread(self.query_one("#render-info", Static).update, f"[red]Render failed[/red]\n\n{escape(str(err))}")
-            self.app.call_from_thread(self.app.set_pages, None)
+            self.app.call_from_thread(self._render_done, gen, None, str(err))
             return
-        self.app.call_from_thread(self.show, r)
+        self.app.call_from_thread(self._render_done, gen, r, None)
+
+    def _render_done(self, gen: int, r: render.RenderResult | None, error: str | None) -> None:
+        if not self.is_current or gen != self._gen:
+            return
+        if r is None:
+            self.query_one("#render-info", Static).update(f"[red]Render failed[/red]\n\n{escape(error or '')}")
+            self.app.set_pages(None)
+            return
+        self.show(r)
 
     def show(self, r: render.RenderResult) -> None:
         self.result = r
@@ -70,8 +83,10 @@ class RenderScreen(Screen):
         self.run_render(True)
 
     def action_trim(self) -> None:
-        pages = self.result.pages if self.result else 3
-        self.app.send_to_agent(bridge.trim_prompt(self.p.root, pages))
+        if self.result is None:
+            self.app.notify("Render has not finished yet")
+            return
+        self.app.send_to_agent(bridge.trim_prompt(self.p.root, self.result.pages))
 
     def action_finalize(self) -> None:
         self.app.notify("Finalize: built in Task 15")
