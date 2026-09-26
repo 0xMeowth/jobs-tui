@@ -15,6 +15,10 @@ def slug(text: str) -> str:
     return text.strip("-")
 
 
+def compact(text: str) -> str:
+    return slug(text).replace("-", "")
+
+
 @dataclass(frozen=True)
 class AppPaths:
     root: Path

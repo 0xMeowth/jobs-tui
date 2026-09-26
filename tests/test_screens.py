@@ -979,3 +979,26 @@ async def test_x_refuses_submitted_application(jobs_dir, two_apps):
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
         assert target.root.exists()
         assert any("submitted" in n for n in notices)
+
+
+async def test_new_application_reuses_existing_company(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, Static, TextArea
+        company = app.screen.query_one("#company", Input)
+        assert await company.suggester.get_suggestion("fab") == "Fabrikam"
+        company.value = "fab rikam"
+        app.screen.query_one("#role", Input).value = "Analyst"
+        app.screen.query_one("#paste", TextArea).text = "Analyst needed."
+        await pilot.click("#create")
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if app.screen.__class__.__name__ == "ApplicationsScreen":
+                break
+        p = paths.app_paths(jobs_dir, "Fabrikam", "Analyst")
+        assert p.meta.exists()
+        assert application.load(p).company == "Fabrikam"
+        assert not (jobs_dir / "companies" / "fab-rikam").exists()

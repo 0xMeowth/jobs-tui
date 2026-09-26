@@ -50,3 +50,10 @@ def test_template_paths(jobs_dir):
     assert paths.master_yaml(jobs_dir) == jobs_dir / "templates" / "resume-master.yaml"
     assert paths.template_typ(jobs_dir) == jobs_dir / "templates" / "resume.typ"
     assert paths.tracker_md(jobs_dir) == jobs_dir / "tracker.md"
+
+
+def test_compact_folds_spacing_case_and_punctuation():
+    assert paths.compact("Fab rikam") == "fabrikam"
+    assert paths.compact("fab-rikam") == "fabrikam"
+    assert paths.compact("FABRIKAM") == "fabrikam"
+    assert paths.compact("Meta") != paths.compact("Metabase")

@@ -57,3 +57,17 @@ def test_delete_removes_application_folder(jobs_dir):
     p = application.create(jobs_dir, "Acme", "Analyst", None)
     application.delete(p)
     assert not p.root.exists()
+
+
+def test_company_names_lists_existing_display_names(jobs_dir):
+    application.create(jobs_dir, "Fabrikam", "PM", None)
+    application.create(jobs_dir, "Fabrikam", "Analyst", None)
+    application.create(jobs_dir, "Northwind", "Analyst", None)
+    assert sorted(application.company_names(jobs_dir)) == ["Northwind", "Fabrikam"]
+
+
+def test_existing_company_snaps_to_display_name(jobs_dir):
+    application.create(jobs_dir, "Fabrikam", "PM", None)
+    assert application.existing_company(jobs_dir, "fab rikam") == "Fabrikam"
+    assert application.existing_company(jobs_dir, "FABRIKAM") == "Fabrikam"
+    assert application.existing_company(jobs_dir, "Meta") is None

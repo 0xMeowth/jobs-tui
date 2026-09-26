@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 
-from jobs_tui.paths import AppPaths, app_paths, master_yaml
+from jobs_tui.paths import AppPaths, app_paths, compact, list_applications, master_yaml
 
 
 @dataclass
@@ -23,6 +23,32 @@ def load(p: AppPaths) -> Application:
 
 def save(p: AppPaths, app: Application) -> None:
     p.meta.write_text(json.dumps(asdict(app), indent=2) + "\n")
+
+
+def _display_names(jobs: Path) -> dict[str, str]:
+    names: dict[str, str] = {}
+    for p in list_applications(jobs):
+        if p.company_slug in names:
+            continue
+        try:
+            names[p.company_slug] = load(p).company
+        except (OSError, ValueError, TypeError):
+            continue
+    return names
+
+
+def company_names(jobs: Path) -> list[str]:
+    return list(_display_names(jobs).values())
+
+
+def existing_company(jobs: Path, typed: str) -> str | None:
+    key = compact(typed)
+    if not key:
+        return None
+    for folder, name in _display_names(jobs).items():
+        if compact(folder) == key:
+            return name
+    return None
 
 
 def create(jobs: Path, company: str, role: str, url: str | None) -> AppPaths:

@@ -3,6 +3,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.containers import Vertical, Horizontal
 from textual.screen import ModalScreen
+from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Static, TextArea
 
 from jobs_tui import application, jd
@@ -19,7 +20,7 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             yield Label("[b]New application[/b]")
-            yield Input(placeholder="Company", id="company")
+            yield Input(placeholder="Company", id="company", suggester=SuggestFromList(application.company_names(self.app.jobs), case_sensitive=False))
             yield Input(placeholder="Role", id="role")
             yield Input(placeholder="Job posting URL (leave empty to paste)", id="url")
             yield Label("Or paste the job description:")
@@ -57,6 +58,10 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
             status.update("Company and role need at least one ASCII letter or digit for the folder name.")
             return
         if self.created is None:
+            known = application.existing_company(self.app.jobs, company)
+            if known and known != company:
+                company = known
+                self.app.notify(f"Using existing company {known}")
             try:
                 self.created = application.create(self.app.jobs, company, role, url)
             except FileExistsError:
