@@ -1,3 +1,5 @@
+import re
+
 from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -29,6 +31,15 @@ For op add use "entry" and "after" instead of "path". Keep the resume to two pag
 """
 
 
+def saved_brief(p: AppPaths) -> str:
+    try:
+        text = p.review_request.read_text()
+    except OSError:
+        return ""
+    m = re.search(r"## User focus\n\n(.*?)\n\n## Required output", text, re.S)
+    return m.group(1).strip() if m else ""
+
+
 class BriefScreen(ModalScreen[None]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
@@ -41,7 +52,7 @@ class BriefScreen(ModalScreen[None]):
         pane = {v: label for label, v in self.app.pane_options}.get(pane_id, escape(pane_id)) if pane_id else None
         with Vertical(id="dialog"):
             yield Label("[b]Review brief[/b]  What should the agent focus on?")
-            yield TextArea("", id="brief")
+            yield TextArea(saved_brief(self.p), id="brief")
             yield Label(f"Agent pane: {pane if pane else 'none. Close this dialog and press p to pair'}")
             with Horizontal():
                 yield Button("Start review", variant="primary", id="start")

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
@@ -107,8 +108,15 @@ class CommandBar(Widget):
         text = event.value.strip()
         event.input.value = ""
         if text:
-            app.send_to_agent(free_text_prompt(app.current.root if app.current else None, text))
+            app.send_to_agent(free_text_prompt(app.current.root if app.current else None, text), on_busy=partial(self.restore_input, text))
         app.leave_bar()
+
+    def restore_input(self, text: str) -> None:
+        if not self.is_mounted:
+            return
+        box = self.query_one("#agent-input", Input)
+        box.value = text
+        box.focus()
 
 
 class JobsApp(App):
@@ -152,16 +160,18 @@ class JobsApp(App):
     def action_focus_pair(self) -> None:
         self._enter_bar("#agent-pane")
 
-    def send_to_agent(self, text: str, force: bool = False) -> None:
+    def send_to_agent(self, text: str, force: bool = False, on_busy: Callable[[], None] | None = None) -> None:
         force = force or (text == self._busy_text)
-        self.run_worker(partial(self._deliver, text, force), thread=True, group="deliver")
+        self.run_worker(partial(self._deliver, text, force, on_busy), thread=True, group="deliver")
 
-    def _deliver(self, text: str, force: bool) -> None:
+    def _deliver(self, text: str, force: bool, on_busy: Callable[[], None] | None) -> None:
         outcome = self.bridge.deliver(text, force=force)
-        self.call_from_thread(self._notify_outcome, outcome, text)
+        self.call_from_thread(self._notify_outcome, outcome, text, on_busy)
 
-    def _notify_outcome(self, outcome: str, text: str) -> None:
+    def _notify_outcome(self, outcome: str, text: str, on_busy: Callable[[], None] | None = None) -> None:
         self._busy_text = text if outcome == "busy" else None
+        if outcome == "busy" and on_busy is not None:
+            on_busy()
         messages = {
             "sent": "Sent to agent pane",
             "busy": "Agent pane is working. Press again to force, or wait.",

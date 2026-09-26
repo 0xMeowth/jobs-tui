@@ -1077,3 +1077,38 @@ async def test_reject_and_comment_refuse_accepted_edit(jobs_dir, reviewable, mon
         assert app.screen.__class__.__name__ == "ReviewScreen"
         assert load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
     assert notices.count("Already accepted") == 2
+
+
+async def test_busy_agent_keeps_typed_message(jobs_dir, two_apps, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    pane = bridge_mod.Pane("wK:p1", "codex", "working", "/j", "t", "jobs")
+    monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
+    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
+    monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane)
+    app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Input
+        await pilot.press("colon", *"hello", "enter")
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        box = app.screen.query_one("#agent-input", Input)
+        assert box.value == "hello"
+        assert box.has_focus
+
+
+async def test_brief_prefills_from_saved_request(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import TextArea
+        await pilot.press("b")
+        await pilot.pause()
+        app.screen.query_one("#brief", TextArea).text = "Lead with analytics.\nMention SQL."
+        await pilot.click("#save")
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        assert app.screen.query_one("#brief", TextArea).text == "Lead with analytics.\nMention SQL."
