@@ -4,7 +4,7 @@ Screen { layout: vertical; }
 #app-detail, #edit-detail { width: 1fr; border: solid $secondary; padding: 0 1; }
 #feedback { height: 5; border: solid $accent; }
 CommandBar { dock: bottom; height: 3; layout: horizontal; background: $panel; }
-CommandBar #agent-status { width: 42; padding: 1 1; color: $text-muted; }
+CommandBar #agent-status { width: 60; padding: 1 1; color: $text-muted; }
 CommandBar #agent-input { width: 1fr; }
 .help { color: $text-muted; padding: 0 1; }
 ModalScreen { align: center middle; }

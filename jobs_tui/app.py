@@ -2,6 +2,8 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.css.query import NoMatches
+from textual.events import Key
 from textual.widget import Widget
 from textual.widgets import Input, Static
 
@@ -24,6 +26,11 @@ class CommandBar(Widget):
         agent = f"{pane.agent} {pane.pane_id} {pane.status}" if pane else "no agent pane (copies to clipboard)"
         pages = f" · {app.pages} pages" if app.pages is not None else ""
         self.query_one("#agent-status", Static).update(agent + pages)
+
+    def on_key(self, event: Key) -> None:
+        if event.key == "escape" and self.query_one("#agent-input", Input).has_focus:
+            event.stop()
+            self.screen.set_focus(None)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         app: JobsApp = self.app  # type: ignore[assignment]
@@ -50,7 +57,10 @@ class JobsApp(App):
         self.push_screen(ApplicationsScreen())
 
     def action_focus_bar(self) -> None:
-        self.screen.query_one("#agent-input", Input).focus()
+        try:
+            self.screen.query("#agent-input").first().focus()
+        except NoMatches:
+            return
 
     def send_to_agent(self, text: str, force: bool = False) -> str:
         outcome = self.bridge.deliver(text, force=force)

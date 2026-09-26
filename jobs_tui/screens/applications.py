@@ -58,6 +58,10 @@ class ApplicationsScreen(Screen):
         if self.apps:
             lv.index = min(keep, len(self.apps) - 1)
             self.show_detail(self.apps[lv.index])
+        else:
+            self.app.current = None
+            self.app.set_pages(None)
+            self.query_one("#app-detail", Static).update("No applications yet. Press n.")
 
     def show_detail(self, p: AppPaths) -> None:
         self.app.current = p
@@ -86,7 +90,15 @@ class ApplicationsScreen(Screen):
         return True
 
     def action_new_app(self) -> None:
-        self.app.notify("New application: built in Task 11")
+        from jobs_tui.screens.new_application import NewApplicationScreen
+
+        def done(p: AppPaths | None) -> None:
+            self.call_later(self.refresh_list)
+            if p is not None:
+                self.app.current = p
+                self.app.notify(f"Created {p.company_slug}/{p.role_slug}")
+
+        self.app.push_screen(NewApplicationScreen(), done)
 
     def action_open_app(self) -> None:
         if self.app.current:

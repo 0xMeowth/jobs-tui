@@ -60,3 +60,85 @@ async def test_command_bar_submit_copies_when_no_pane(jobs_dir, monkeypatch):
         await pilot.press("enter")
         await pilot.pause()
     assert copied == ["hello"]
+
+
+async def test_new_application_creates_and_imports_pasted_jd(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, TextArea
+        app.screen.query_one("#company", Input).value = "Acme"
+        app.screen.query_one("#role", Input).value = "Analyst"
+        app.screen.query_one("#paste", TextArea).text = "We need an analyst who knows SQL."
+        await pilot.click("#create")
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if app.screen.__class__.__name__ == "ApplicationsScreen":
+                break
+    p = paths.app_paths(jobs_dir, "Acme", "Analyst")
+    assert p.meta.exists()
+    assert "We need an analyst" in p.jd_md.read_text()
+
+
+async def test_new_application_url_import_error_keeps_dialog(jobs_dir, monkeypatch):
+    from jobs_tui import jd
+    monkeypatch.setattr(jd, "import_url", lambda url, p: (_ for _ in ()).throw(jd.JDError("blocked")))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, Static
+        app.screen.query_one("#company", Input).value = "Acme"
+        app.screen.query_one("#role", Input).value = "PM"
+        app.screen.query_one("#url", Input).value = "https://careers.example.com/1"
+        await pilot.click("#create")
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if "blocked" in str(app.screen.query_one("#new-status", Static).content):
+                break
+        assert app.screen.__class__.__name__ == "NewApplicationScreen"
+    assert paths.app_paths(jobs_dir, "Acme", "PM").meta.exists()
+
+
+async def test_new_application_rejects_empty_slug(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, Static, TextArea
+        app.screen.query_one("#company", Input).value = "—"
+        app.screen.query_one("#role", Input).value = "Analyst"
+        app.screen.query_one("#paste", TextArea).text = "Some description."
+        await pilot.click("#create")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "NewApplicationScreen"
+        assert str(app.screen.query_one("#new-status", Static).content)
+    assert paths.list_applications(jobs_dir) == []
+
+
+async def test_colon_on_modal_does_not_crash(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.press("colon")
+        await pilot.pause()
+        assert app.is_running
+        assert app.screen.__class__.__name__ == "NewApplicationScreen"
+
+
+async def test_escape_leaves_command_bar(jobs_dir):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("colon")
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        from textual.widgets import Input
+        assert not app.screen.query_one("#agent-input", Input).has_focus
