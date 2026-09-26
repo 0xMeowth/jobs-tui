@@ -46,6 +46,8 @@ class FinalizeScreen(ModalScreen[bool]):
         self.dismiss(False)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if not self.is_current:
+            return
         if event.button.id != "yes":
             self.dismiss(False)
             return
