@@ -73,7 +73,7 @@ def summary(p: AppPaths) -> dict:
             es = edits_mod.load_edits(p.proposed_edits)
             decisions = edits_mod.load_feedback(p.review_feedback)
             total = len(es)
-            pending = sum(1 for e in es if edits_mod.status_of(e.id, decisions) == "pending")
+            pending = edits_mod.counts(es, decisions)["pending"]
         except Exception:
             total = pending = 0
     pages = None

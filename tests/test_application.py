@@ -71,3 +71,17 @@ def test_existing_company_snaps_to_display_name(jobs_dir):
     assert application.existing_company(jobs_dir, "fab rikam") == "Fabrikam"
     assert application.existing_company(jobs_dir, "FABRIKAM") == "Fabrikam"
     assert application.existing_company(jobs_dir, "Meta") is None
+
+
+def test_summary_pending_counts_open_and_rework_only(jobs_dir):
+    import json
+    from jobs_tui.edits import Decision, save_feedback
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [
+        {"id": "a", "path": "acme.b1.text", "proposed": "x"},
+        {"id": "b", "path": "acme.b2.text", "proposed": "y"},
+        {"id": "c", "path": "acme.b1.text", "proposed": "z"},
+    ]}))
+    save_feedback(p.review_feedback, {"a": Decision("pending", comment="rework me"), "b": Decision("rejected"), "c": Decision("accepted", final="z")})
+    s = application.summary(p)
+    assert s["edits_total"] == 3 and s["edits_pending"] == 1
