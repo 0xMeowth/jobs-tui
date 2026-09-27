@@ -19,9 +19,6 @@ from jobs_tui.model import Resume, apply_edit
 from jobs_tui.paths import AppPaths
 from jobs_tui.watcher import watch_folder
 
-GLYPH = {"pending": "○", "accepted": "●", "rejected": "×", "needs_revision": "◐"}
-
-
 class FolderChanged(Message):
     def __init__(self, names: set[str]) -> None:
         super().__init__()
@@ -74,11 +71,11 @@ class CommentScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("[b]Feedback for the agent[/b]  Marks this edit for revision. s sends all feedback to the agent.")
+            yield Label("[b]Comment for the agent[/b]  Pending edits are reworked. Rejected edits carry it as the reason. Empty clears it. s sends all comments.")
             yield TextArea(self.text, id="comment")
             yield Static(edit_diff(self.edit), id="dialog-diff")
             with Horizontal():
-                yield Button("Mark for revision", variant="primary", id="ok")
+                yield Button("Save comment", variant="primary", id="ok")
                 yield Button("Cancel", id="cancel")
 
     def action_cancel(self) -> None:
@@ -123,7 +120,7 @@ class ReviewScreen(Screen):
         self._stop = threading.Event()
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · d diff · A accept all · s send feedback · r render · p pair · Esc back", classes="help")
+        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · p pair · Esc back", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="edit-list")
             yield Static("", id="edit-detail")
@@ -169,7 +166,7 @@ class ReviewScreen(Screen):
         index = lv.index or 0
         await lv.clear()
         await lv.extend([
-            ListItem(Label(f"{GLYPH[E.status_of(e.id, self.decisions)]} {escape(text)}"), name=e.id)
+            ListItem(Label(f"{E.GLYPH[E.state_of(e.id, self.decisions)]} {escape(text)}"), name=e.id)
             for e, text in zip(self.edits, labels)
         ])
         if self.edits:
@@ -190,12 +187,22 @@ class ReviewScreen(Screen):
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
         body = edit_diff(e) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
-        head = f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}  · {c['pending']} pending, {c['accepted']} accepted, {c['rejected']} rejected, {c['needs_revision']} need revision"
+        state = E.state_of(e.id, self.decisions)
+        head = (f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}  · {c['open']} open, {c['rework']} rework, "
+                f"{c['accepted']} accepted, {c['rejected'] + c['rejected_reason']} rejected")
         if c["pending"] == 0:
-            head += "\n[b]All decided[/b] · r render · f finalize" + (" · s send feedback" if c["needs_revision"] else "")
-        status = [f"Status: {d.status}"] if d.status != "pending" else []
-        if d.feedback:
-            status.append(f"Feedback: {escape(d.feedback)}")
+            head += "\n[b]All decided[/b] · r render · f finalize"
+        elif c["rework"]:
+            head += f" · s send {c['rework']} rework"
+        status = []
+        if state == "rework":
+            status.append(f"Rework, sent with s: {escape(d.comment)}")
+        elif state == "rejected_reason":
+            status.append(f"Rejected, reason sent with s: {escape(d.comment)}")
+        elif state == "rejected":
+            status.append("Rejected")
+        elif state == "accepted":
+            status.append("Accepted" + (f", comment not sent: {escape(d.comment)}" if d.comment else ""))
         if d.final and d.final != e.proposed:
             status.append(f"Final: {escape(d.final)}")
         lines = [
@@ -212,20 +219,26 @@ class ReviewScreen(Screen):
         if e:
             self.show(e)
 
-    def decide(self, e: E.Edit, status: str, final: str | None = None, feedback: str | None = None) -> None:
+    def set_status(self, e: E.Edit, status: str, **fields: object) -> None:
         prev = self.decisions.get(e.id, E.Decision())
-        self.decisions[e.id] = E.Decision(status, final if final is not None else prev.final, feedback if feedback is not None else prev.feedback)
+        data = {**prev.__dict__, **fields, "status": status}
+        self.decisions[e.id] = E.Decision(**data)
         E.save_feedback(self.p.review_feedback, self.decisions)
         self.call_later(self.reload)
 
-    def accepted(self, e: E.Edit) -> bool:
+    def set_comment(self, e: E.Edit, text: str) -> None:
+        prev = self.decisions.get(e.id, E.Decision())
+        self.set_status(e, prev.status, comment=text)
+
+    def refuse_if_accepted(self, e: E.Edit) -> bool:
         if E.status_of(e.id, self.decisions) == "accepted":
-            self.app.notify("Already accepted")
+            self.app.notify("Press u to undo accept first")
             return True
         return False
 
     def apply(self, e: E.Edit, final: str | None, render: bool = True) -> None:
-        if self.accepted(e):
+        if E.status_of(e.id, self.decisions) == "accepted":
+            self.app.notify("Already accepted")
             return
         try:
             resume = Resume.load(self.p.resume_yaml)
@@ -237,7 +250,7 @@ class ReviewScreen(Screen):
             self.app.notify(escape(f"Cannot apply edit: {err}"), severity="error")
             return
         resume.save(self.p.resume_yaml)
-        self.decide(e, "accepted", final=final if final is not None else e.proposed)
+        self.set_status(e, "accepted", final=final if final is not None else e.proposed)
         if render:
             self.rerender()
 
@@ -258,13 +271,18 @@ class ReviewScreen(Screen):
             self.action_next()
 
     def action_reject(self) -> None:
-        if (e := self.current()) and not self.accepted(e):
-            self.decide(e, "rejected")
-            self.action_next()
+        e = self.current()
+        if not e or self.refuse_if_accepted(e):
+            return
+        if E.status_of(e.id, self.decisions) == "rejected":
+            self.app.notify("Already rejected")
+            return
+        self.set_status(e, "rejected")
+        self.action_next()
 
     def action_edit(self) -> None:
         e = self.current()
-        if not e or self.accepted(e):
+        if not e or self.refuse_if_accepted(e):
             return
         if e.op == "remove":
             self.app.notify("Remove edits can't be reworded")
@@ -272,9 +290,11 @@ class ReviewScreen(Screen):
         self.app.push_screen(EditTextScreen(e), lambda text: text is not None and self.apply(e, text))
 
     def action_comment(self) -> None:
-        if (e := self.current()) and not self.accepted(e):
-            prev = self.decisions.get(e.id, E.Decision()).feedback
-            self.app.push_screen(CommentScreen(e, prev), lambda text: text is not None and self.decide(e, "needs_revision", feedback=text))
+        e = self.current()
+        if not e or self.refuse_if_accepted(e):
+            return
+        prev = self.decisions.get(e.id, E.Decision()).comment
+        self.app.push_screen(CommentScreen(e, prev), lambda text: text is not None and self.set_comment(e, text))
 
     def action_toggle_diff(self) -> None:
         self.show_diff = not self.show_diff
@@ -292,15 +312,15 @@ class ReviewScreen(Screen):
             lv.index -= 1
 
     def action_accept_all(self) -> None:
-        for e in [e for e in self.edits if E.status_of(e.id, self.decisions) == "pending"]:
+        for e in [e for e in self.edits if E.state_of(e.id, self.decisions) == "open"]:
             self.apply(e, None, render=False)
         self.rerender()
 
     def action_send_feedback(self) -> None:
-        if not E.counts(self.edits, self.decisions)["needs_revision"]:
-            self.app.notify("No edits marked for revision. Press c on an edit first.")
+        if not E.counts(self.edits, self.decisions)["rework"]:
+            self.app.notify("No edits to rework. Press c on an edit first.")
             return
-        self.app.send_to_agent(bridge.feedback_prompt(self.p.root))
+        self.app.send_to_agent(bridge.feedback_prompt(self.p.root, E.load_request(self.p.review_feedback)["round"] + 1))
 
     def action_render(self) -> None:
         from jobs_tui.screens.render_screen import RenderScreen
