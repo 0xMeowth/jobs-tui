@@ -1598,7 +1598,9 @@ async def test_undo_accepted_replace_restores_yaml(jobs_dir, reviewable, monkeyp
         await pilot.press("up", "u")
         await pilot.pause(0.3)
     assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built a churn model on 2M customer records that cut voluntary churn by 8% in two quarters"
-    assert load_feedback(reviewable.review_feedback)["e1"].status == "pending"
+    d = load_feedback(reviewable.review_feedback)["e1"]
+    assert d.status == "pending"
+    assert d.final is None and d.before is None and d.applied_id is None
 
 
 async def test_undo_accepted_refuses_when_yaml_changed(jobs_dir, reviewable, monkeypatch):
@@ -1644,6 +1646,38 @@ async def test_undo_accepted_add_removes_bullet(jobs_dir, monkeypatch):
         await pilot.press("u")
         await pilot.pause(0.3)
     assert not Resume.load(p.resume_yaml).has("acme.b3")
+    from jobs_tui.edits import load_feedback
+    d = load_feedback(p.review_feedback)["n1"]
+    assert d.status == "pending"
+    assert d.final is None and d.before is None and d.applied_id is None
+
+
+async def test_undo_accepted_add_refuses_when_bullet_changed(jobs_dir, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import load_feedback
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [
+        {"id": "n1", "op": "add", "entry": "acme", "after": "acme.b2", "current": "", "proposed": "Shipped a thing", "reason": "gap"}
+    ]}))
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        r = Resume.load(p.resume_yaml)
+        r.set("acme.b3.text", "Shipped a thing, hand edited")
+        r.save(p.resume_yaml)
+        await pilot.press("u")
+        await pilot.pause(0.3)
+    assert Resume.load(p.resume_yaml).get("acme.b3.text") == "Shipped a thing, hand edited"
+    assert load_feedback(p.review_feedback)["n1"].status == "accepted"
+    assert any("changed since accept" in n for n in notices)
 
 
 async def test_undo_accepted_remove_refuses(jobs_dir, monkeypatch):
