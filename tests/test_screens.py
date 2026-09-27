@@ -1544,3 +1544,140 @@ async def test_brief_request_has_review_rounds_section(jobs_dir, two_apps):
     assert "same list position" in rounds
     assert 'Never re-propose an edit whose decision is "rejected"' in rounds
     assert 'Act only on review-feedback.json "request" items' in rounds
+
+
+async def test_accept_records_before_text(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import load_feedback
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+    d = load_feedback(reviewable.review_feedback)["e1"]
+    assert d.before == "Built a churn model on 2M customer records that cut voluntary churn by 8% in two quarters" and d.applied_id == "acme.b1" and d.final == "Built and deployed a churn model"
+
+
+async def test_undo_rejected_returns_to_pending_keeping_comment(jobs_dir, reviewable):
+    from jobs_tui.edits import load_feedback
+    from textual.widgets import TextArea
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        app.screen.query_one("#comment", TextArea).text = "why"
+        await pilot.click("#ok")
+        await pilot.pause()
+        await pilot.press("up", "x")
+        await pilot.pause()
+        await pilot.press("up", "u")
+        await pilot.pause()
+    d = load_feedback(reviewable.review_feedback)["e1"]
+    assert d.status == "pending" and d.comment == "why"
+
+
+async def test_undo_accepted_replace_restores_yaml(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import load_feedback
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
+        await pilot.press("up", "u")
+        await pilot.pause(0.3)
+    assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built a churn model on 2M customer records that cut voluntary churn by 8% in two quarters"
+    assert load_feedback(reviewable.review_feedback)["e1"].status == "pending"
+
+
+async def test_undo_accepted_refuses_when_yaml_changed(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import load_feedback
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        r = Resume.load(reviewable.resume_yaml)
+        r.set("acme.b1.text", "hand edited")
+        r.save(reviewable.resume_yaml)
+        await pilot.press("up", "u")
+        await pilot.pause(0.3)
+    assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "hand edited"
+    assert load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
+    assert any("changed since accept" in n for n in notices)
+
+
+async def test_undo_accepted_add_removes_bullet(jobs_dir, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [
+        {"id": "n1", "op": "add", "entry": "acme", "after": "acme.b2", "current": "", "proposed": "Shipped a thing", "reason": "gap"}
+    ]}))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        assert Resume.load(p.resume_yaml).has("acme.b3")
+        await pilot.press("u")
+        await pilot.pause(0.3)
+    assert not Resume.load(p.resume_yaml).has("acme.b3")
+
+
+async def test_undo_accepted_remove_refuses(jobs_dir, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [
+        {"id": "d1", "op": "remove", "path": "acme.b2", "current": "Automated weekly reporting", "proposed": "", "reason": "cut"}
+    ]}))
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        assert not Resume.load(p.resume_yaml).has("acme.b2")
+        await pilot.press("u")
+        await pilot.pause(0.3)
+    assert not Resume.load(p.resume_yaml).has("acme.b2")
+    assert any("Can't undo a remove" in n for n in notices)
+
+
+async def test_undo_on_open_edit_says_nothing_to_undo(jobs_dir, reviewable):
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("u")
+        await pilot.pause()
+    assert "Nothing to undo" in notices

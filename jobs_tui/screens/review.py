@@ -103,6 +103,7 @@ class ReviewScreen(Screen):
         Binding("x", "reject", "Reject"),
         Binding("e", "edit", "Edit"),
         Binding("c", "comment", "Comment"),
+        Binding("u", "undo", "Undo"),
         Binding("d", "toggle_diff", "Diff"),
         Binding("j", "next", "Next"), Binding("k", "prev", "Prev"),
         Binding("A", "accept_all", "Accept all pending"),
@@ -242,7 +243,8 @@ class ReviewScreen(Screen):
             return
         try:
             resume = Resume.load(self.p.resume_yaml)
-            apply_edit(resume, e.as_dict(), final)
+            before = resume.get(e.path) if e.op == "replace" else None
+            applied_id = apply_edit(resume, e.as_dict(), final)
         except (yaml.YAMLError, OSError) as err:
             self.app.notify(escape(f"Cannot read resume.yaml: {err}"), severity="error")
             return
@@ -250,7 +252,7 @@ class ReviewScreen(Screen):
             self.app.notify(escape(f"Cannot apply edit: {err}"), severity="error")
             return
         resume.save(self.p.resume_yaml)
-        self.set_status(e, "accepted", final=final if final is not None else e.proposed)
+        self.set_status(e, "accepted", final=final if final is not None else e.proposed, before=before, applied_id=applied_id)
         if render:
             self.rerender()
 
@@ -295,6 +297,40 @@ class ReviewScreen(Screen):
             return
         prev = self.decisions.get(e.id, E.Decision()).comment
         self.app.push_screen(CommentScreen(e, prev), lambda text: text is not None and self.set_comment(e, text))
+
+    def action_undo(self) -> None:
+        e = self.current()
+        if not e:
+            return
+        d = self.decisions.get(e.id, E.Decision())
+        if d.status == "pending":
+            self.app.notify("Nothing to undo")
+            return
+        if d.status == "rejected":
+            self.set_status(e, "pending")
+            return
+        if e.op == "remove":
+            self.app.notify("Can't undo a remove. Press y on the list to edit resume.yaml.")
+            return
+        try:
+            resume = Resume.load(self.p.resume_yaml)
+            if e.op == "replace":
+                if resume.get(e.path) != d.final:
+                    raise KeyError(E.label(e))
+                resume.set(e.path, d.before or "")
+            else:
+                if not d.applied_id or not resume.has(d.applied_id) or resume.get(f"{d.applied_id}.text") != d.final:
+                    raise KeyError(d.applied_id or E.label(e))
+                resume.remove(d.applied_id)
+        except (yaml.YAMLError, OSError) as err:
+            self.app.notify(escape(f"Cannot read resume.yaml: {err}"), severity="error")
+            return
+        except KeyError as err:
+            self.app.notify(f"resume.yaml changed since accept ({escape(str(err).strip(chr(39)))}). Undo the later edit first, or press y on the list.", severity="warning")
+            return
+        resume.save(self.p.resume_yaml)
+        self.set_status(e, "pending", final=None, before=None, applied_id=None)
+        self.rerender()
 
     def action_toggle_diff(self) -> None:
         self.show_diff = not self.show_diff
