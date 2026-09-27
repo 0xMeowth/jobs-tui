@@ -312,12 +312,15 @@ class ReviewScreen(Screen):
         if e.op == "remove":
             self.app.notify("Can't undo a remove. Press y on the list to edit resume.yaml.")
             return
+        if e.op == "replace" and d.before is None:
+            self.app.notify("No recorded text to restore for this edit. Press y on the list to edit resume.yaml.")
+            return
         try:
             resume = Resume.load(self.p.resume_yaml)
             if e.op == "replace":
                 if resume.get(e.path) != d.final:
                     raise KeyError(E.label(e))
-                resume.set(e.path, d.before or "")
+                resume.set(e.path, d.before)
             else:
                 if not d.applied_id or not resume.has(d.applied_id) or resume.get(f"{d.applied_id}.text") != d.final:
                     raise KeyError(d.applied_id or E.label(e))

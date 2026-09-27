@@ -1681,3 +1681,24 @@ async def test_undo_on_open_edit_says_nothing_to_undo(jobs_dir, reviewable):
         await pilot.press("u")
         await pilot.pause()
     assert "Nothing to undo" in notices
+
+
+async def test_undo_replace_without_recorded_before_refuses(jobs_dir, reviewable):
+    from jobs_tui import edits as E
+    from jobs_tui.model import Resume
+    r = Resume.load(reviewable.resume_yaml)
+    r.set("acme.b1.text", "Built and deployed a churn model")
+    r.save(reviewable.resume_yaml)
+    E.save_feedback(reviewable.review_feedback, {"e1": E.Decision("accepted", final="Built and deployed a churn model")})
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("u")
+        await pilot.pause()
+    assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
+    assert E.load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
+    assert any("No recorded text" in n for n in notices)
