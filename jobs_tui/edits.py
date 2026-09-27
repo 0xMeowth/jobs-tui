@@ -6,8 +6,8 @@ from pathlib import Path
 from jobs_tui.model import split_path
 
 STATUSES = ("pending", "accepted", "rejected")
-STATES = ("open", "rework", "rejected", "rejected_reason", "accepted")
-GLYPH = {"open": "○", "rework": "◐", "rejected": "×", "rejected_reason": "⊗", "accepted": "●"}
+STATES = ("open", "rework", "sent", "rejected", "rejected_reason", "accepted")
+GLYPH = {"open": "○", "rework": "◐", "sent": "◑", "rejected": "×", "rejected_reason": "⊗", "accepted": "●"}
 
 
 @dataclass
@@ -82,20 +82,22 @@ def status_of(edit_id: str, decisions: dict[str, Decision]) -> str:
     return decisions[edit_id].status if edit_id in decisions else "pending"
 
 
-def state_of(edit_id: str, decisions: dict[str, Decision]) -> str:
+def state_of(edit_id: str, decisions: dict[str, Decision], proposed: str | None = None) -> str:
     d = decisions.get(edit_id, Decision())
     if d.status == "accepted":
         return "accepted"
     if d.status == "rejected":
         return "rejected_reason" if d.comment else "rejected"
+    if d.comment and proposed is not None and d.sent_proposed == proposed:
+        return "sent"
     return "rework" if d.comment else "open"
 
 
 def counts(edits: list[Edit], decisions: dict[str, Decision]) -> dict[str, int]:
     out = {s: 0 for s in STATES}
     for e in edits:
-        out[state_of(e.id, decisions)] += 1
-    out["pending"] = out["open"] + out["rework"]
+        out[state_of(e.id, decisions, e.proposed)] += 1
+    out["pending"] = out["open"] + out["rework"] + out["sent"]
     return out
 
 

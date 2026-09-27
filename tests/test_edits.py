@@ -41,7 +41,7 @@ def test_counts_and_label(tmp_path):
     p = tmp_path / "proposed-edits.json"; p.write_text(json.dumps(SAMPLE))
     es = load_edits(p)
     d = {"e1": Decision("accepted"), "e3": Decision("rejected")}
-    assert counts(es, d) == {"open": 1, "rework": 0, "rejected": 1, "rejected_reason": 0, "accepted": 1, "pending": 1}
+    assert counts(es, d) == {"open": 1, "rework": 0, "rejected": 1, "rejected_reason": 0, "accepted": 1, "sent": 0, "pending": 1}
     assert label(es[0]) == "acme.b1"
     assert label(es[1]) == "+ globex"
     assert label(es[2]) == "- globex.b1"
@@ -79,7 +79,16 @@ def test_counts_by_state():
     edits = [Edit(id=i, path=f"{i}.text") for i in ("a", "b", "c", "d")]
     d = {"a": Decision("pending", comment="x"), "b": Decision("rejected"), "c": Decision("accepted", final="y")}
     c = counts(edits, d)
-    assert c == {"open": 1, "rework": 1, "rejected": 1, "rejected_reason": 0, "accepted": 1, "pending": 2}
+    assert c == {"open": 1, "rework": 1, "rejected": 1, "rejected_reason": 0, "accepted": 1, "sent": 0, "pending": 2}
+
+
+def test_sent_state_needs_matching_proposed():
+    d = {"a": Decision("pending", comment="x", sent_proposed="old")}
+    assert state_of("a", d) == "rework"
+    assert state_of("a", d, "old") == "sent"
+    assert state_of("a", d, "new") == "rework"
+    c = counts([Edit(id="a", path="a.text", proposed="old")], d)
+    assert c["sent"] == 1 and c["rework"] == 0 and c["pending"] == 1
 
 
 def test_request_block_roundtrip_and_preserved(tmp_path):

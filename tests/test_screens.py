@@ -1739,7 +1739,92 @@ async def test_send_feedback_writes_request_block(jobs_dir, reviewable, monkeypa
         assert sent and "-r1" in sent[0]
         await pilot.press("s")
         await pilot.pause()
-        assert load_request(reviewable.review_feedback)["round"] == 2
+        assert load_request(reviewable.review_feedback)["round"] == 1
+        assert len(sent) == 2 and sent[0] == sent[1]
+
+
+async def comment_and_send(app, pilot, text="Keep the 8% figure"):
+    from textual.widgets import TextArea
+    await pilot.press("c")
+    await pilot.pause()
+    app.screen.query_one("#comment", TextArea).text = text
+    await pilot.click("#ok")
+    await pilot.pause()
+    await pilot.press("s")
+    await pilot.pause()
+
+
+async def test_send_feedback_second_press_resends_same_text(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui.edits import load_request
+    sent = []
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: sent.append(text))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await comment_and_send(app, pilot)
+        await pilot.press("s")
+        await pilot.pause()
+    assert len(sent) == 2 and sent[0] == sent[1]
+    assert load_request(reviewable.review_feedback)["round"] == 1
+
+
+async def test_sent_edit_refuses_verdicts_until_revision(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import load_feedback
+    from jobs_tui.model import Resume
+    from textual.widgets import Label, ListView, Static
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
+    original = Resume.load(reviewable.resume_yaml).get("acme.b1.text")
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await comment_and_send(app, pilot)
+        for key in ("a", "x", "e", "c"):
+            notices.clear()
+            app.screen.query_one("#edit-list", ListView).index = 0
+            await pilot.pause()
+            await pilot.press(key)
+            await pilot.pause(0.2)
+            assert app.screen.__class__.__name__ == "ReviewScreen", key
+            assert "Sent for rework. Wait for the revision, or press u to withdraw." in notices, key
+            d = load_feedback(reviewable.review_feedback)["e1"]
+            assert d.status == "pending" and d.comment == "Keep the 8% figure", key
+        app.screen.query_one("#edit-list", ListView).index = 0
+        await pilot.pause()
+        rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
+        assert rows[0].startswith("◑")
+        plain = app.screen.query_one("#edit-detail", Static).render().plain
+        assert "1 sent" in plain.splitlines()[0]
+        assert "Sent for rework, waiting for the agent: Keep the 8% figure" in plain
+    assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == original
+
+
+async def test_undo_withdraws_sent_edit(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui.edits import load_feedback
+    from textual.widgets import Label, ListView
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await comment_and_send(app, pilot)
+        await pilot.press("u")
+        await pilot.pause()
+        rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
+        assert rows[0].startswith("◐")
+    d = load_feedback(reviewable.review_feedback)["e1"]
+    assert d.sent_proposed is None and d.status == "pending" and d.comment == "Keep the 8% figure"
+    assert "Withdrawn. It will not be re-sent unless you press s again." in notices
 
 
 REVISED_EDITS = {"edits": [

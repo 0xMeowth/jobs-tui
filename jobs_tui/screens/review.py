@@ -169,7 +169,7 @@ class ReviewScreen(Screen):
         index = lv.index or 0
         await lv.clear()
         await lv.extend([
-            ListItem(Label(f"{E.GLYPH[E.state_of(e.id, self.decisions)]} {escape(text)}"), name=e.id)
+            ListItem(Label(f"{E.GLYPH[E.state_of(e.id, self.decisions, e.proposed)]} {escape(text)}"), name=e.id)
             for e, text in zip(self.edits, labels)
         ])
         if self.edits:
@@ -199,9 +199,10 @@ class ReviewScreen(Screen):
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
         body = edit_diff(e) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
-        state = E.state_of(e.id, self.decisions)
+        state = E.state_of(e.id, self.decisions, e.proposed)
         head = (f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}" + (f"  · r{self.round_of(e)}" if e.revises else "")
-                + f"  · {c['open']} open, {c['rework']} rework, {c['accepted']} accepted, {c['rejected'] + c['rejected_reason']} rejected")
+                + f"  · {c['open']} open, {c['rework']} rework" + (f", {c['sent']} sent" if c['sent'] else "")
+                + f", {c['accepted']} accepted, {c['rejected'] + c['rejected_reason']} rejected")
         if c["pending"] == 0:
             head += "\n[b]All decided[/b] · r render · f finalize"
         elif c["rework"]:
@@ -209,6 +210,8 @@ class ReviewScreen(Screen):
         status = []
         if state == "rework":
             status.append(f"Rework, sent with s: {escape(d.comment)}")
+        elif state == "sent":
+            status.append(f"Sent for rework, waiting for the agent: {escape(d.comment)}")
         elif state == "rejected_reason":
             status.append(f"Rejected, reason sent with s: {escape(d.comment)}")
         elif state == "rejected":
@@ -255,6 +258,12 @@ class ReviewScreen(Screen):
             return True
         return False
 
+    def refuse_if_sent(self, e: E.Edit) -> bool:
+        if E.state_of(e.id, self.decisions, e.proposed) == "sent":
+            self.app.notify("Sent for rework. Wait for the revision, or press u to withdraw.")
+            return True
+        return False
+
     def apply(self, e: E.Edit, final: str | None, render: bool = True) -> None:
         if E.status_of(e.id, self.decisions) == "accepted":
             self.app.notify("Already accepted")
@@ -286,13 +295,15 @@ class ReviewScreen(Screen):
 
     # ----- actions -----
     def action_accept(self) -> None:
-        if e := self.current():
-            self.apply(e, None)
-            self.action_next()
+        e = self.current()
+        if not e or self.refuse_if_sent(e):
+            return
+        self.apply(e, None)
+        self.action_next()
 
     def action_reject(self) -> None:
         e = self.current()
-        if not e or self.refuse_if_accepted(e):
+        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e):
             return
         if E.status_of(e.id, self.decisions) == "rejected":
             self.app.notify("Already rejected")
@@ -302,7 +313,7 @@ class ReviewScreen(Screen):
 
     def action_edit(self) -> None:
         e = self.current()
-        if not e or self.refuse_if_accepted(e):
+        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e):
             return
         if e.op == "remove":
             self.app.notify("Remove edits can't be reworded")
@@ -311,7 +322,7 @@ class ReviewScreen(Screen):
 
     def action_comment(self) -> None:
         e = self.current()
-        if not e or self.refuse_if_accepted(e):
+        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e):
             return
         prev = self.decisions.get(e.id, E.Decision()).comment
         self.app.push_screen(CommentScreen(e, prev), lambda text: text is not None and self.set_comment(e, text))
@@ -321,6 +332,10 @@ class ReviewScreen(Screen):
         if not e:
             return
         d = self.decisions.get(e.id, E.Decision())
+        if E.state_of(e.id, self.decisions, e.proposed) == "sent":
+            self.set_status(e, "pending", sent_proposed=None)
+            self.app.notify("Withdrawn. It will not be re-sent unless you press s again.")
+            return
         if d.status == "pending":
             self.app.notify("Nothing to undo")
             return
@@ -380,16 +395,21 @@ class ReviewScreen(Screen):
             lv.index -= 1
 
     def action_accept_all(self) -> None:
-        for e in [e for e in self.edits if E.state_of(e.id, self.decisions) == "open"]:
+        for e in [e for e in self.edits if E.state_of(e.id, self.decisions, e.proposed) == "open"]:
             self.apply(e, None, render=False)
         self.rerender()
 
     def action_send_feedback(self) -> None:
-        states = {e.id: E.state_of(e.id, self.decisions) for e in self.edits}
+        states = {e.id: E.state_of(e.id, self.decisions, e.proposed) for e in self.edits}
+        stored = E.load_request(self.p.review_feedback)
         if not any(s == "rework" for s in states.values()):
+            if any(s == "sent" for s in states.values()) and stored["items"]:
+                self.app.send_to_agent(bridge.feedback_prompt(self.p.root, stored["round"]))
+                self.app.notify(f"Re-sent round {stored['round']}")
+                return
             self.app.notify("No edits to rework. Press c on an edit first.")
             return
-        round_no = E.load_request(self.p.review_feedback)["round"] + 1
+        round_no = stored["round"] + 1
         items = []
         for e in self.edits:
             d = self.decisions.get(e.id, E.Decision())
@@ -400,6 +420,7 @@ class ReviewScreen(Screen):
                 items.append({"id": e.id, "action": "rejected", "comment": d.comment, "proposed": e.proposed})
         E.save_feedback(self.p.review_feedback, self.decisions, request={"round": round_no, "items": items})
         self.app.send_to_agent(bridge.feedback_prompt(self.p.root, round_no))
+        self.call_later(self.reload)
 
     def action_render(self) -> None:
         from jobs_tui.screens.render_screen import RenderScreen
