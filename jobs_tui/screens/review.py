@@ -1,5 +1,6 @@
 import difflib
 import json
+import re
 import threading
 from functools import partial
 
@@ -104,6 +105,7 @@ class ReviewScreen(Screen):
         Binding("e", "edit", "Edit"),
         Binding("c", "comment", "Comment"),
         Binding("u", "undo", "Undo"),
+        Binding("v", "accept_previous", "Accept previous"),
         Binding("d", "toggle_diff", "Diff"),
         Binding("j", "next", "Next"), Binding("k", "prev", "Prev"),
         Binding("A", "accept_all", "Accept all pending"),
@@ -152,7 +154,7 @@ class ReviewScreen(Screen):
         try:
             edits = E.load_edits(self.p.proposed_edits)
             decisions = E.load_feedback(self.p.review_feedback)
-            labels = [E.label(e) for e in edits]
+            labels = [E.label(e) + (f" r{self.round_of(e)}" if e.revises else "") for e in edits]
         except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError) as err:
             # The agent may be mid-write; keep the last good state and try once more.
             if retry:
@@ -184,13 +186,22 @@ class ReviewScreen(Screen):
         lv = self.query_one("#edit-list", ListView)
         return self.edits[lv.index] if self.edits and lv.index is not None else None
 
+    def round_of(self, e: E.Edit) -> int:
+        m = re.search(r"-r(\d+)$", e.id)
+        return int(m.group(1)) if m else 0
+
+    def previous_text(self, e: E.Edit) -> str | None:
+        if not e.revises:
+            return None
+        return self.decisions.get(e.revises, E.Decision()).sent_proposed
+
     def show(self, e: E.Edit) -> None:
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
         body = edit_diff(e) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
         state = E.state_of(e.id, self.decisions)
-        head = (f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}  · {c['open']} open, {c['rework']} rework, "
-                f"{c['accepted']} accepted, {c['rejected'] + c['rejected_reason']} rejected")
+        head = (f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}" + (f"  · r{self.round_of(e)}" if e.revises else "")
+                + f"  · {c['open']} open, {c['rework']} rework, {c['accepted']} accepted, {c['rejected'] + c['rejected_reason']} rejected")
         if c["pending"] == 0:
             head += "\n[b]All decided[/b] · r render · f finalize"
         elif c["rework"]:
@@ -206,11 +217,18 @@ class ReviewScreen(Screen):
             status.append("Accepted" + (f", comment not sent: {escape(d.comment)}" if d.comment else ""))
         if d.final and d.final != e.proposed:
             status.append(f"Final: {escape(d.final)}")
+        previous = []
+        prev_text = self.previous_text(e)
+        if prev_text is not None:
+            prev_comment = self.decisions.get(e.revises, E.Decision()).comment
+            previous = [f"[dim]PREVIOUS (r{self.round_of(e) - 1})[/dim]\n[dim]{escape(prev_text)}[/dim]", "",
+                        f"[dim]YOUR COMMENT[/dim]\n{escape(prev_comment)}", ""]
         lines = [
             head, "",
             f"ALIGNMENT  {escape(', '.join(e.jd_alignment)) or '-'}", "",
             body, "",
             f"[dim]REASON[/dim]\n{escape(e.reason)}", "",
+            *previous,
             "\n".join(status),
         ]
         self.query_one("#edit-detail", Static).update("\n".join(lines))
@@ -334,6 +352,17 @@ class ReviewScreen(Screen):
         resume.save(self.p.resume_yaml)
         self.set_status(e, "pending", final=None, before=None, applied_id=None)
         self.rerender()
+
+    def action_accept_previous(self) -> None:
+        e = self.current()
+        if not e or self.refuse_if_accepted(e):
+            return
+        prev = self.previous_text(e)
+        if prev is None:
+            self.app.notify("No previous round for this edit")
+            return
+        self.apply(e, prev)
+        self.action_next()
 
     def action_toggle_diff(self) -> None:
         self.show_diff = not self.show_diff

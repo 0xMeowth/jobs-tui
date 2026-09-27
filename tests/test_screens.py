@@ -1740,3 +1740,63 @@ async def test_send_feedback_writes_request_block(jobs_dir, reviewable, monkeypa
         await pilot.press("s")
         await pilot.pause()
         assert load_request(reviewable.review_feedback)["round"] == 2
+
+
+REVISED_EDITS = {"edits": [
+    {"id": "e1-r1", "revises": "e1", "path": "acme.b1.text", "current": "Built a churn model", "proposed": "Built a churn model that cut churn 8%", "reason": "kept figure"},
+    {"id": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting", "proposed": "Automated reporting", "reason": "shorter"},
+]}
+
+
+async def test_revised_edit_shows_previous_and_comment(jobs_dir, reviewable):
+    from jobs_tui.edits import Decision, save_feedback
+    from textual.widgets import Label, ListView, Static
+    save_feedback(reviewable.review_feedback,
+                  {"e1": Decision("pending", comment="Keep the 8% figure", sent_proposed="Built and deployed a churn model")},
+                  request={"round": 1, "items": []})
+    reviewable.proposed_edits.write_text(json.dumps(REVISED_EDITS))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
+        assert rows[0].startswith("○ acme.b1 r1")
+        plain = app.screen.query_one("#edit-detail", Static).render().plain
+        assert "PREVIOUS (r0)" in plain and "Built and deployed a churn model" in plain
+        assert "YOUR COMMENT" in plain and "Keep the 8% figure" in plain
+        assert "· r1" in plain.splitlines()[0]
+
+
+async def test_v_accepts_previous_wording(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import Decision, load_feedback, save_feedback
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    save_feedback(reviewable.review_feedback,
+                  {"e1": Decision("pending", comment="Keep the 8% figure", sent_proposed="Built and deployed a churn model")},
+                  request={"round": 1, "items": []})
+    reviewable.proposed_edits.write_text(json.dumps(REVISED_EDITS))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("v")
+        await pilot.pause(0.3)
+    assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
+    d = load_feedback(reviewable.review_feedback)["e1-r1"]
+    assert d.status == "accepted" and d.final == "Built and deployed a churn model"
+
+
+async def test_v_without_previous_round_notifies(jobs_dir, reviewable):
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("v")
+        await pilot.pause()
+    assert "No previous round for this edit" in notices
