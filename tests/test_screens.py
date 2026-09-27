@@ -1421,3 +1421,19 @@ async def test_pair_dialog_cancel_returns_to_list(jobs_dir, two_apps, monkeypatc
         await pilot.pause()
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
         assert app.bridge.pane_id is None
+
+
+async def test_brief_request_has_method_and_default_focus(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        await pilot.click("#save")
+        await pilot.pause()
+    req = app.current.review_request.read_text()
+    method = req.split("## Method\n")[1].split("## User focus")[0]
+    assert method.count("\n1. ") == 1 and "\n7. " in method
+    assert "exact phrase" in method and "Do not add any skill" in method and "wait for a reply" in method
+    assert "## User focus\n\nOptimise this resume for the role.\n\n## Required output" in req
+    assert "Maximise" not in req
