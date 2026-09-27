@@ -63,7 +63,7 @@ def test_company_names_lists_existing_display_names(jobs_dir):
     application.create(jobs_dir, "Fabrikam", "PM", None)
     application.create(jobs_dir, "Fabrikam", "Analyst", None)
     application.create(jobs_dir, "Northwind", "Analyst", None)
-    assert sorted(application.company_names(jobs_dir)) == ["Northwind", "Fabrikam"]
+    assert sorted(application.company_names(jobs_dir)) == ["Fabrikam", "Northwind"]
 
 
 def test_existing_company_snaps_to_display_name(jobs_dir):

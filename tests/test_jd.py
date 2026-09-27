@@ -24,7 +24,7 @@ def test_linkedin_job_id_forms():
 def test_parse_linkedin_fixture():
     j = jd.parse_linkedin(FIX.read_text(), SEARCH_URL)
     assert j.title == "Pastry Chef"
-    assert j.company == "Northwind"
+    assert j.company == "Northwind Bakery"
     assert j.location == "Wellington, New Zealand"
     assert j.method == "linkedin"
     assert j.text.startswith("**Who We Are**\n")
@@ -90,7 +90,7 @@ def test_import_url_linkedin_writes_files(tmp_path, monkeypatch):
     p = AppPaths(tmp_path / "app"); p.root.mkdir()
     monkeypatch.setattr(jd, "fetch_linkedin", lambda job_id, url, timeout=8: (jd.parse_linkedin(FIX.read_text(), url), FIX.read_text()))
     j = jd.import_url(SEARCH_URL, p)
-    assert j.company == "Northwind"
+    assert j.company == "Northwind Bakery"
     assert p.jd_md.read_text().startswith("# Pastry Chef\n")
     assert p.jd_html.exists()
 

@@ -1,25 +1,99 @@
 # jobs-tui
 
-Terminal app for tailoring a resume per job application, with a Codex or Claude pane doing the writing.
+Terminal app for tailoring one resume per job application. You keep a master resume in YAML. For each job the app copies it, imports the job description, hands both to a coding agent (Codex or Claude Code) running in a herdr pane, and lets you accept or reject the agent's proposed edits one by one. Accepted edits render to a two page PDF with Typst.
 
-## Setup
+## Requirements
 
-    brew install typst poppler   # or download the typst release binary from
-                                  # https://github.com/typst/typst/releases into ~/.local/bin
-    brew install --cask font-nunito
+- macOS, Python 3.12 or newer, and [uv](https://docs.astral.sh/uv/).
+- `typst`, `pdfinfo` and `pdftoppm` on your PATH. `brew install typst poppler`, or download the Typst release binary into `~/.local/bin`.
+- The Nunito font for the default template: `brew install --cask font-nunito`.
+- Optional: Google Chrome. Job pages that block plain HTTP fetches fall back to a browser.
+- Optional: herdr with a Codex or Claude Code pane. Without it the app copies prompts to the clipboard for you to paste.
+
+## Install
+
+    git clone <this repo> && cd jobs-tui
     uv sync
-    export JOBS_DIR=~/dev/jobs        # default
-    uv run jobs-tui init              # creates templates/ if missing
-    uv run jobs-tui doctor
 
-Replace `$JOBS_DIR/templates/resume-master.yaml` with your own content. Styling lives in `resume.typ`; the numbers at the top are the only knobs.
+## First run
 
-## Run
+1. Pick a data folder. Everything the app writes lives there, never in this repo.
 
-    uv run jobs-tui
+        export JOBS_DIR=~/dev/jobs    # this is the default
 
-Open it in a herdr pane next to your Codex or Claude pane. Keys are listed at the top of every screen. `p` picks the agent pane to pair with (on the review screen `p` renders, so click the pane box instead). `:` sends a message to the paired agent pane.
+2. Create the folder layout and starter files.
 
-## Files per application
+        uv run jobs-tui init
 
-See `docs/superpowers/specs/2026-09-26-jobs-tui-design.md`.
+   This creates `templates/resume.typ` and `templates/resume-master.yaml` in `JOBS_DIR`, plus an empty `companies/` folder.
+
+3. Put your own resume into `templates/resume-master.yaml`. The starter is a skeleton with bracketed slots. Keep the shape:
+
+        name: <your name>
+        contact: {phone: "...", email: "...", linkedin: "..."}
+        sections:
+          - id: experience
+            title: Experience
+            entries:
+              - id: job1
+                org: <employer>
+                title: <job title>
+                dates: <start> – <end>
+                bullets:
+                  - id: job1.b1
+                    text: <what you did and the result>
+          - id: skills
+            title: Skills & Interests
+            bullets:
+              - id: skills.b1
+                text: "<area>: <tools>"
+
+   Every entry and bullet has an `id`. Ids are how the agent addresses edits, so give each one a short stable name and never renumber.
+
+4. Check the setup.
+
+        uv run jobs-tui doctor
+
+   Every line marked `!!` must be fixed before the app runs. Lines marked `--` are optional.
+
+5. Start the app.
+
+        uv run jobs-tui
+
+## Daily use
+
+Open the app in one herdr pane and your agent in another. Press `p` in the app and pick the agent pane from the dropdown. Keys are listed at the top of every screen.
+
+- `n` new application. Give company, role and a job URL, or paste the description. LinkedIn URLs use the public guest endpoint. Other sites are fetched over HTTP, then with Chrome if needed.
+- The brief dialog opens next. Say what the agent should focus on, then press Start review. The app writes `review-request.md` into the application folder and tells the agent to read it.
+- The review screen fills as the agent writes `proposed-edits.json`. `a` accepts, `x` rejects, `e` lets you reword before accepting, `c` sends a comment back, `s` sends all comments to the agent.
+- `r` renders the PDF and shows the page count. `a` on that screen tightens spacing. `t` asks the agent to trim content.
+- `f` finalizes once the PDF fits two pages. It copies the PDF to `resume-submitted.pdf`, records the date, and adds a row to `tracker.md`.
+- `:` sends a free text message to the agent about the selected application.
+- `x` on the list deletes a draft after confirmation. Submitted applications cannot be deleted.
+
+## Data folder layout
+
+    $JOBS_DIR/
+      templates/resume-master.yaml    your resume
+      templates/resume.typ            layout; the numbers at the top are the only knobs
+      tracker.md                      one row per submitted application
+      companies/<company>/<role>/
+        application.json              company, role, url, dates
+        resume.yaml                   this application's copy of the master
+        jd.md                         imported job description
+        review-request.md             your brief for the agent
+        proposed-edits.json           written by the agent
+        review-feedback.json          your decisions
+        resume.pdf                    latest render
+        resume-submitted.pdf          copy taken at finalize
+
+## Other commands
+
+    uv run jobs-tui jd <url>    # print a job description as markdown without creating an application
+
+## Development
+
+    uv run pytest
+
+Design notes are in `docs/superpowers/specs/2026-09-26-jobs-tui-design.md`.

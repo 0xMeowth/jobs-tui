@@ -5,7 +5,7 @@ import pytest
 
 from jobs_tui.model import Resume, apply_edit, split_path
 
-EXAMPLE = Path(__file__).resolve().parents[1] / "jobs_tui" / "assets" / "resume-example.yaml"
+EXAMPLE = Path(__file__).resolve().parent / "fixtures" / "resume-sample.yaml"
 
 
 @pytest.fixture

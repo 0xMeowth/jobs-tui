@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 ASSETS = Path(__file__).resolve().parents[1] / "jobs_tui" / "assets"
+SAMPLE = Path(__file__).resolve().parent / "fixtures" / "resume-sample.yaml"
 
 
 @pytest.fixture
@@ -13,8 +14,7 @@ def jobs_dir(tmp_path, monkeypatch) -> Path:
     (jobs / "companies").mkdir()
     if (ASSETS / "resume.typ").exists():
         shutil.copy(ASSETS / "resume.typ", jobs / "templates" / "resume.typ")
-    if (ASSETS / "resume-example.yaml").exists():
-        shutil.copy(ASSETS / "resume-example.yaml", jobs / "templates" / "resume-master.yaml")
+    shutil.copy(SAMPLE, jobs / "templates" / "resume-master.yaml")
     monkeypatch.setenv("JOBS_DIR", str(jobs))
     monkeypatch.setenv("HERDR_ENV", "0")
     return jobs

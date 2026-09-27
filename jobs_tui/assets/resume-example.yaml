@@ -1,42 +1,31 @@
-name: Ada Example
+name: <your name>
 contact:
-  phone: "(65) 0000 0000"
-  email: ada@example.com
-  linkedin: linkedin.com/in/ada-example
+  phone: "<phone>"
+  email: <email>
+  linkedin: <linkedin handle>
 sections:
   - id: experience
     title: Experience
     entries:
-      - id: acme
-        org: Acme Analytics
-        title: Senior Data Analyst
-        dates: Jan 2023 – Present
+      - id: job1
+        org: <employer>
+        title: <job title>
+        dates: <start> – <end>
         bullets:
-          - id: acme.b1
-            text: Built a churn model on 2M customer records that cut voluntary churn by 8% in two quarters
-          - id: acme.b2
-            text: Automated weekly reporting in SQL and Power BI, saving the team 6 hours a week
-      - id: globex
-        org: Globex Corporation
-        title: Business Analyst
-        dates: Jun 2020 – Dec 2022
-        bullets:
-          - id: globex.b1
-            text: Wrote requirements for a pricing tool used by 40 account managers across three markets
+          - id: job1.b1
+            text: <what you did and the result>
   - id: skills
     title: Skills & Interests
     bullets:
       - id: skills.b1
-        text: "Data: SQL, Python (pandas, scikit-learn), Power BI"
-      - id: skills.b2
-        text: "Languages: English, Mandarin"
+        text: "<area>: <tools>"
   - id: education
     title: Education
     entries:
-      - id: nus
-        org: Example State University
-        title: Bachelor of Business Administration, Honours
-        dates: Aug 2016 – Jul 2020
+      - id: school1
+        org: <school>
+        title: <degree>
+        dates: <start> – <end>
         bullets:
-          - id: nus.b1
-            text: Modules included Business Analytics and Optimisation
+          - id: school1.b1
+            text: <optional line>
