@@ -38,6 +38,13 @@ Role: {role}
 Write proposed edits to proposed-edits.json in this folder as
 {{"edits": [{{"id": "...", "op": "replace|add|remove", "path": "<unit id>.text", "current": "...", "proposed": "...", "reason": "...", "jd_alignment": ["..."]}}]}}.
 For op add use "entry" and "after" instead of "path". Keep the resume to two pages. Do not edit resume.yaml.
+
+## Review rounds
+
+- Ids are unique across all rounds. A revision's id is "<base>-r<round>" and it carries "revises": "<id it replaces>".
+- A revision replaces the edit it revises in place, in the same list position. Never delete or reorder other edits.
+- Before proposing any edit, read review-feedback.json if it exists. Never re-propose an edit whose decision is "rejected", or any edit with the same path and the same proposed meaning.
+- Act only on review-feedback.json "request" items. Ignore "decisions" except for the rule above.
 """
 
 

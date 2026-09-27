@@ -1471,3 +1471,19 @@ async def test_comment_dialog_shows_diff(jobs_dir, reviewable):
         assert app.screen.__class__.__name__ == "CommentScreen"
         plain = app.screen.query_one("#dialog-diff", Static).render().plain
         assert "Built" in plain and "deployed" in plain
+
+
+async def test_brief_request_has_review_rounds_section(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        await pilot.click("#save")
+        await pilot.pause()
+    req = app.current.review_request.read_text()
+    rounds = req.split("## Review rounds\n")[1]
+    assert '"<base>-r<round>"' in rounds and '"revises"' in rounds
+    assert "same list position" in rounds
+    assert 'Never re-propose an edit whose decision is "rejected"' in rounds
+    assert 'Act only on review-feedback.json "request" items' in rounds
