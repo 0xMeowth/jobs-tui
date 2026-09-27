@@ -133,3 +133,13 @@ def test_import_text(tmp_path):
     text = p.jd_md.read_text()
     assert text.startswith("# Job description\n\n- Source: pasted\n- Fetched: ")
     assert text.endswith("\n\nWe need an analyst.\n")
+
+
+def test_fetch_url_does_not_write_and_write_jd_does(tmp_path, monkeypatch):
+    p = AppPaths(tmp_path / "app"); p.root.mkdir()
+    monkeypatch.setattr(jd, "fetch_linkedin", lambda job_id, url, timeout=8: (jd.parse_linkedin(FIX.read_text(), url), FIX.read_text()))
+    j, html = jd.fetch_url(SEARCH_URL)
+    assert j.title == "Pastry Chef" and j.company == "Northwind Bakery"
+    assert not p.jd_md.exists()
+    jd.write_jd(j, html, p)
+    assert p.jd_md.read_text().startswith("# Pastry Chef\n") and p.jd_html.exists()

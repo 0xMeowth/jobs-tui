@@ -132,24 +132,32 @@ def to_markdown(j: JD, fetched: date) -> str:
     return "\n".join(lines)
 
 
-def import_url(url: str, p: AppPaths) -> JD:
+def fetch_url(url: str) -> tuple[JD, str]:
     job_id = linkedin_job_id(url)
     if job_id:
-        j, html = fetch_linkedin(job_id, url)
-    else:
-        try:
-            html = fetch_http(url)
-            j = extract_generic(html, url, "http")
-        except JDError:
-            html = None
-            j = None
-        if j is None:
-            html = fetch_browser(url)
-            j = extract_generic(html, url, "browser")
-        if j is None:
-            raise JDError("Could not extract a job description from that page. Paste it instead.")
+        return fetch_linkedin(job_id, url)
+    try:
+        html = fetch_http(url)
+        j = extract_generic(html, url, "http")
+    except JDError:
+        html = None
+        j = None
+    if j is None:
+        html = fetch_browser(url)
+        j = extract_generic(html, url, "browser")
+    if j is None:
+        raise JDError("Could not extract a job description from that page. Paste it instead.")
+    return j, html
+
+
+def write_jd(j: JD, html: str, p: AppPaths) -> None:
     p.jd_html.write_text(html)
     p.jd_md.write_text(to_markdown(j, date.today()))
+
+
+def import_url(url: str, p: AppPaths) -> JD:
+    j, html = fetch_url(url)
+    write_jd(j, html, p)
     return j
 
 

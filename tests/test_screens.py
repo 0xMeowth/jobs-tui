@@ -93,7 +93,7 @@ async def test_new_application_creates_and_imports_pasted_jd(jobs_dir, two_apps)
 
 async def test_new_application_url_import_error_keeps_dialog(jobs_dir, monkeypatch):
     from jobs_tui import jd
-    monkeypatch.setattr(jd, "import_url", lambda url, p: (_ for _ in ()).throw(jd.JDError("blocked")))
+    monkeypatch.setattr(jd, "fetch_url", lambda url: (_ for _ in ()).throw(jd.JDError("blocked")))
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -113,7 +113,12 @@ async def test_new_application_url_import_error_keeps_dialog(jobs_dir, monkeypat
         assert "blocked" in str(app.screen.query_one("#new-status", Static).content)
         assert not app.screen.query_one("#create", Button).disabled
         assert app.screen.query_one("#paste", TextArea).has_focus
-    assert paths.app_paths(jobs_dir, "Acme", "PM").meta.exists()
+        assert not paths.app_paths(jobs_dir, "Acme", "PM").root.exists()
+        app.screen.query_one("#paste", TextArea).text = "Pasted description."
+        await pilot.click("#create")
+        await pilot.pause()
+    p = paths.app_paths(jobs_dir, "Acme", "PM")
+    assert p.meta.exists() and "Pasted description." in p.jd_md.read_text()
 
 
 async def test_new_application_rejects_empty_slug(jobs_dir):
@@ -165,7 +170,7 @@ async def test_cancel_during_url_fetch_returns_to_list(jobs_dir, monkeypatch):
     import threading
     from jobs_tui import jd
     release = threading.Event()
-    monkeypatch.setattr(jd, "import_url", lambda url, p: release.wait(2))
+    monkeypatch.setattr(jd, "fetch_url", lambda url: release.wait(2))
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -1312,8 +1317,61 @@ async def test_enter_in_company_moves_to_role(jobs_dir):
         await pilot.press("n")
         await pilot.pause()
         from textual.widgets import Input, Static
+        app.screen.query_one("#company", Input).focus()
         await pilot.press(*"Acme", "enter")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "NewApplicationScreen"
         assert app.screen.query_one("#role", Input).has_focus
         assert app.screen.query_one("#new-status", Static).render().plain == ""
+
+
+async def test_new_application_from_url_only(jobs_dir, monkeypatch):
+    from jobs_tui import jd
+    j = jd.JD("Pastry Chef", "Northwind Bakery", "Wellington", "https://www.linkedin.com/jobs/view/1", "linkedin", "Bake things.")
+    monkeypatch.setattr(jd, "fetch_url", lambda url: (j, "<html>x</html>"))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input
+        assert app.screen.query_one("#url", Input).has_focus
+        await pilot.press(*"https://www.linkedin.com/jobs/view/1", "enter")
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if app.screen.__class__.__name__ == "BriefScreen":
+                break
+        assert app.screen.__class__.__name__ == "BriefScreen"
+    p = paths.app_paths(jobs_dir, "Northwind Bakery", "Pastry Chef")
+    assert p.meta.exists()
+    assert application.load(p).company == "Northwind Bakery" and application.load(p).role == "Pastry Chef"
+    assert p.jd_md.read_text().startswith("# Pastry Chef\n") and p.jd_html.exists()
+
+
+async def test_new_application_url_without_company_asks_for_it(jobs_dir, monkeypatch):
+    from jobs_tui import jd
+    j = jd.JD("Pastry Chef", None, None, "https://careers.example.com/1", "http", "Bake things. " * 20)
+    monkeypatch.setattr(jd, "fetch_url", lambda url: (j, "<html>x</html>"))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        from textual.widgets import Input, Static
+        await pilot.press(*"https://careers.example.com/1", "enter")
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if app.screen.query_one("#company", Input).has_focus:
+                break
+        assert app.screen.__class__.__name__ == "NewApplicationScreen"
+        assert app.screen.query_one("#role", Input).value == "Pastry Chef"
+        assert app.screen.query_one("#company", Input).has_focus
+        assert "ompany" in app.screen.query_one("#new-status", Static).render().plain
+        await pilot.press(*"Acme", "enter")
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if app.screen.__class__.__name__ == "BriefScreen":
+                break
+        assert app.screen.__class__.__name__ == "BriefScreen"
+    p = paths.app_paths(jobs_dir, "Acme", "Pastry Chef")
+    assert p.meta.exists() and "Bake things." in p.jd_md.read_text()
