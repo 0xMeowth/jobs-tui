@@ -1375,3 +1375,49 @@ async def test_new_application_url_without_company_asks_for_it(jobs_dir, monkeyp
         assert app.screen.__class__.__name__ == "BriefScreen"
     p = paths.app_paths(jobs_dir, "Acme", "Pastry Chef")
     assert p.meta.exists() and "Bake things." in p.jd_md.read_text()
+
+
+async def test_brief_asks_to_pair_when_unpaired_in_herdr(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        from textual.widgets import Label, Select
+        await wait_for_options(pilot, app.screen.query_one("#agent-pane", Select), 2)
+        await pilot.press("b")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "PairScreen"
+        app.screen.query_one("#pair-select", Select).value = "wK:p1"
+        await pilot.click("#continue")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "BriefScreen"
+        assert app.bridge.pane_id == "wK:p1"
+        assert any("Agent pane: codex · jobs · Improve" in str(l.content) for l in app.screen.query(Label))
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.query_one("#agent-pane", Select).value == "wK:p1"
+
+
+async def test_brief_skips_pair_dialog_when_paired(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "BriefScreen"
+
+
+async def test_pair_dialog_cancel_returns_to_list(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "PairScreen"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+        assert app.bridge.pane_id is None

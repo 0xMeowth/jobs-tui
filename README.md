@@ -65,7 +65,7 @@ Terminal app for tailoring one resume per job application. You keep a master res
 Open the app in one herdr pane and your agent in another. Press `p` in the app and pick the agent pane from the dropdown. Keys are listed at the top of every screen.
 
 - `n` new application. Paste the posting URL and press Enter. Company and role fill in from the page, and you can correct them before the folder is created. LinkedIn URLs use the public guest endpoint. Other sites are fetched over HTTP, then with Chrome if needed. No URL? Paste the description and type company and role yourself.
-- The brief dialog opens next. Say what the agent should focus on, then press Start review. The app writes `review-request.md` into the application folder and tells the agent to read it.
+- If no agent pane is paired yet, a dialog asks you to pick one. Then the brief dialog opens. Say what the agent should focus on, then press Start review. The app writes `review-request.md` into the application folder and tells the agent to read it.
 - The review screen fills as the agent writes `proposed-edits.json`. `a` accepts, `x` rejects, `e` lets you reword before accepting, `c` sends a comment back, `s` sends all comments to the agent.
 - `r` renders the PDF and shows the page count. `a` on that screen tightens spacing. `t` asks the agent to trim content.
 - `f` finalizes once the PDF fits two pages. It copies the PDF to `resume-submitted.pdf`, records the date, and adds a row to `tracker.md`.

@@ -12,7 +12,7 @@ from textual.widgets import Label, ListItem, ListView, Static
 
 from textual import work
 
-from jobs_tui import application, render
+from jobs_tui import application, bridge, render
 from jobs_tui.app import CommandBar
 from jobs_tui.paths import AppPaths, list_applications
 
@@ -123,13 +123,23 @@ class ApplicationsScreen(Screen):
 
     def brief(self, p: AppPaths) -> None:
         from jobs_tui.screens.brief import BriefScreen
+        from jobs_tui.screens.pair import PairScreen
 
         def done(result: str | None) -> None:
             self.call_later(self.refresh_list)
             if result == "start":
                 self.open_review(p)
 
-        self.app.push_screen(BriefScreen(p), done)
+        def paired(ok: bool) -> None:
+            for bar in self.query(CommandBar):
+                bar.refresh_panes()
+            if ok:
+                self.app.push_screen(BriefScreen(p), done)
+
+        if self.app.bridge.pane_id is None and bridge.in_herdr():
+            self.app.push_screen(PairScreen(), paired)
+        else:
+            self.app.push_screen(BriefScreen(p), done)
 
     def action_render(self) -> None:
         if self.app.current:
