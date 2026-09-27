@@ -44,7 +44,7 @@ For op add use "entry" and "after" instead of "path". Keep the resume to two pag
 - Ids are unique across all rounds. A revision's id is "<base>-r<round>" and it carries "revises": "<id it replaces>".
 - A revision replaces the edit it revises in place, in the same list position. Never delete or reorder other edits.
 - Before proposing any edit, read review-feedback.json if it exists. Never re-propose an edit whose decision is "rejected", or any edit with the same path and the same proposed meaning.
-- Act only on review-feedback.json "request" items. Ignore "decisions" except for the rule above.
+- When a message tells you to read the "request" block, act only on its items. Otherwise ignore review-feedback.json except for the rule above.
 """
 
 

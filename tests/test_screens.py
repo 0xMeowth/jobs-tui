@@ -1543,7 +1543,7 @@ async def test_brief_request_has_review_rounds_section(jobs_dir, two_apps):
     assert '"<base>-r<round>"' in rounds and '"revises"' in rounds
     assert "same list position" in rounds
     assert 'Never re-propose an edit whose decision is "rejected"' in rounds
-    assert 'Act only on review-feedback.json "request" items' in rounds
+    assert '- When a message tells you to read the "request" block, act only on its items. Otherwise ignore review-feedback.json except for the rule above.' in rounds
 
 
 async def test_accept_records_before_text(jobs_dir, reviewable, monkeypatch):
