@@ -356,10 +356,21 @@ class ReviewScreen(Screen):
         self.rerender()
 
     def action_send_feedback(self) -> None:
-        if not E.counts(self.edits, self.decisions)["rework"]:
+        states = {e.id: E.state_of(e.id, self.decisions) for e in self.edits}
+        if not any(s == "rework" for s in states.values()):
             self.app.notify("No edits to rework. Press c on an edit first.")
             return
-        self.app.send_to_agent(bridge.feedback_prompt(self.p.root, E.load_request(self.p.review_feedback)["round"] + 1))
+        round_no = E.load_request(self.p.review_feedback)["round"] + 1
+        items = []
+        for e in self.edits:
+            d = self.decisions.get(e.id, E.Decision())
+            if states[e.id] == "rework":
+                items.append({"id": e.id, "action": "revise", "comment": d.comment, "proposed": e.proposed})
+                self.decisions[e.id] = E.Decision(**{**d.__dict__, "sent_proposed": e.proposed})
+            elif states[e.id] == "rejected_reason":
+                items.append({"id": e.id, "action": "rejected", "comment": d.comment, "proposed": e.proposed})
+        E.save_feedback(self.p.review_feedback, self.decisions, request={"round": round_no, "items": items})
+        self.app.send_to_agent(bridge.feedback_prompt(self.p.root, round_no))
 
     def action_render(self) -> None:
         from jobs_tui.screens.render_screen import RenderScreen

@@ -1702,3 +1702,41 @@ async def test_undo_replace_without_recorded_before_refuses(jobs_dir, reviewable
     assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
     assert E.load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
     assert any("No recorded text" in n for n in notices)
+
+
+async def test_send_feedback_writes_request_block(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui.edits import load_feedback, load_request
+    from textual.widgets import TextArea
+    sent = []
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: sent.append(text))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        app.screen.query_one("#comment", TextArea).text = "Keep the 8% figure"
+        await pilot.click("#ok")
+        await pilot.pause()
+        await pilot.press("down", "c")
+        await pilot.pause()
+        app.screen.query_one("#comment", TextArea).text = "Not true"
+        await pilot.click("#ok")
+        await pilot.pause()
+        await pilot.press("x")
+        await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause()
+        req = load_request(reviewable.review_feedback)
+        assert req["round"] == 1
+        assert req["items"] == [
+            {"id": "e1", "action": "revise", "comment": "Keep the 8% figure", "proposed": "Built and deployed a churn model"},
+            {"id": "e2", "action": "rejected", "comment": "Not true", "proposed": "Automated reporting"},
+        ]
+        assert load_feedback(reviewable.review_feedback)["e1"].sent_proposed == "Built and deployed a churn model"
+        assert load_feedback(reviewable.review_feedback)["e2"].sent_proposed is None
+        assert sent and "-r1" in sent[0]
+        await pilot.press("s")
+        await pilot.pause()
+        assert load_request(reviewable.review_feedback)["round"] == 2
