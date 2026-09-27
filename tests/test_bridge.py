@@ -127,15 +127,22 @@ def test_prompts_mention_folder_and_files():
     root = Path("/j/companies/northwind/analyst")
     s = bridge.start_review_prompt(root)
     assert str(root) in s and "review-request.md" in s and "proposed-edits.json" in s and "Do not edit resume.yaml" in s
-    f = bridge.feedback_prompt(root)
-    assert "review-feedback.json" in f and "needs_revision" in f
+    f = bridge.feedback_prompt(root, 1)
+    assert "review-feedback.json" in f and '"revise"' in f
     t = bridge.trim_prompt(root, 3)
     assert "3 pages" in t and "resume.yaml" in t
     assert bridge.free_text_prompt(root, "shorten b2") == f"Regarding {root}: shorten b2"
     assert bridge.free_text_prompt(None, "hi") == "hi"
 
 
-def test_new_round_prompts_require_fresh_ids():
+def test_feedback_prompt_is_deterministic_per_action():
     root = Path("/j/companies/northwind/analyst")
-    for text in (bridge.trim_prompt(root, 3), bridge.feedback_prompt(root)):
-        assert "ids not already in review-feedback.json" in text
+    f = bridge.feedback_prompt(root, 2)
+    assert str(root) in f
+    assert '"request" block in review-feedback.json' in f
+    assert 'action "revise"' in f and '"<base>-r2"' in f and '"revises"' in f
+    assert 'action "rejected"' in f and "do not propose that change again" in f
+    assert "Leave every edit not listed" in f
+    assert "Do not ask me questions" in f and "Do not edit resume.yaml" in f
+    t = bridge.trim_prompt(root, 3)
+    assert "ids not already used in proposed-edits.json or review-feedback.json" in t

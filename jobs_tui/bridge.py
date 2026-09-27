@@ -85,18 +85,23 @@ def start_review_prompt(root: Path) -> str:
     )
 
 
-def feedback_prompt(root: Path) -> str:
+def feedback_prompt(root: Path, round: int) -> str:
     return (
-        f"Read review-feedback.json in {root}. Revise only the edits whose status is needs_revision, "
-        "using my feedback, and rewrite proposed-edits.json keeping every other edit unchanged. "
-        "Give revised edits new ids not already in review-feedback.json. Do not edit resume.yaml."
+        f'Read the "request" block in review-feedback.json in {root}. '
+        f'For each item with action "revise", replace that edit in proposed-edits.json with exactly one new edit that '
+        f'addresses my comment, with id "<base>-r{round}" (base is the item id without any -rN suffix) and '
+        f'"revises": "<item id>", in the same list position. '
+        'For each item with action "rejected", leave that edit unchanged and do not propose that change again in any later round. '
+        'Leave every edit not listed in "request" exactly as it is. '
+        'If a comment cannot be met without adding facts absent from resume.yaml, write the closest honest revision and name the missing fact in its reason. '
+        'Do not ask me questions. Do not edit resume.yaml.'
     )
 
 
 def trim_prompt(root: Path, pages: int) -> str:
     return (
         f"The resume in {root} renders to {pages} pages and must fit 2. Propose trims or merges of bullets in "
-        "resume.yaml as edits in proposed-edits.json, using ids not already in review-feedback.json. "
+        "resume.yaml as edits in proposed-edits.json, using ids not already used in proposed-edits.json or review-feedback.json. "
         "Do not edit resume.yaml."
     )
 
