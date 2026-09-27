@@ -16,7 +16,7 @@ def test_jobs_dir_default(monkeypatch):
 
 
 def test_slug():
-    assert paths.slug("Pastry Chef") == "pastry-chef"
+    assert paths.slug("Pastry Chef / Baker") == "pastry-chef-baker"
     assert paths.slug("  Northwind  ") == "northwind"
     assert paths.slug("Ernst & Young") == "ernst-young"
 
