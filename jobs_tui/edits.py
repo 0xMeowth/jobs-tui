@@ -1,10 +1,13 @@
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from jobs_tui.model import split_path
 
-STATUSES = ("pending", "accepted", "rejected", "needs_revision")
+STATUSES = ("pending", "accepted", "rejected")
+STATES = ("open", "rework", "rejected", "rejected_reason", "accepted")
+GLYPH = {"open": "○", "rework": "◐", "rejected": "×", "rejected_reason": "⊗", "accepted": "●"}
 
 
 @dataclass
@@ -18,6 +21,7 @@ class Edit:
     proposed: str = ""
     reason: str = ""
     jd_alignment: list[str] = field(default_factory=list)
+    revises: str | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -27,7 +31,14 @@ class Edit:
 class Decision:
     status: str = "pending"
     final: str | None = None
-    feedback: str = ""
+    comment: str = ""
+    before: str | None = None
+    applied_id: str | None = None
+    sent_proposed: str | None = None
+
+
+def base_id(edit_id: str) -> str:
+    return re.sub(r"-r\d+$", "", edit_id)
 
 
 def load_edits(path: Path) -> list[Edit]:
@@ -38,25 +49,53 @@ def load_edits(path: Path) -> list[Edit]:
     return [Edit(**{k: v for k, v in item.items() if k in known}) for item in raw]
 
 
+def _migrate(raw: dict) -> Decision:
+    raw = dict(raw)
+    if "feedback" in raw:
+        raw["comment"] = raw.pop("feedback")
+    if raw.get("status") == "needs_revision":
+        raw["status"] = "pending"
+    known = Decision.__dataclass_fields__.keys()
+    return Decision(**{k: v for k, v in raw.items() if k in known})
+
+
+def _read(path: Path) -> dict:
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
 def load_feedback(path: Path) -> dict[str, Decision]:
-    if not path.exists():
-        return {}
-    raw = json.loads(path.read_text()).get("decisions", {})
-    return {k: Decision(**v) for k, v in raw.items()}
+    return {k: _migrate(v) for k, v in _read(path).get("decisions", {}).items()}
 
 
-def save_feedback(path: Path, decisions: dict[str, Decision]) -> None:
-    path.write_text(json.dumps({"decisions": {k: asdict(v) for k, v in decisions.items()}}, indent=2) + "\n")
+def load_request(path: Path) -> dict:
+    return _read(path).get("request") or {"round": 0, "items": []}
+
+
+def save_feedback(path: Path, decisions: dict[str, Decision], request: dict | None = None) -> None:
+    if request is None:
+        request = load_request(path)
+    data = {"decisions": {k: asdict(v) for k, v in decisions.items()}, "request": request}
+    path.write_text(json.dumps(data, indent=2) + "\n")
 
 
 def status_of(edit_id: str, decisions: dict[str, Decision]) -> str:
     return decisions[edit_id].status if edit_id in decisions else "pending"
 
 
+def state_of(edit_id: str, decisions: dict[str, Decision]) -> str:
+    d = decisions.get(edit_id, Decision())
+    if d.status == "accepted":
+        return "accepted"
+    if d.status == "rejected":
+        return "rejected_reason" if d.comment else "rejected"
+    return "rework" if d.comment else "open"
+
+
 def counts(edits: list[Edit], decisions: dict[str, Decision]) -> dict[str, int]:
-    out = {s: 0 for s in STATUSES}
+    out = {s: 0 for s in STATES}
     for e in edits:
-        out[status_of(e.id, decisions)] += 1
+        out[state_of(e.id, decisions)] += 1
+    out["pending"] = out["open"] + out["rework"]
     return out
 
 
