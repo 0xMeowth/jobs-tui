@@ -41,6 +41,11 @@ def base_id(edit_id: str) -> str:
     return re.sub(r"-r\d+$", "", edit_id)
 
 
+def round_of_id(edit_id: str) -> int:
+    m = re.search(r"-r(\d+)$", edit_id)
+    return int(m.group(1)) if m else 0
+
+
 def load_edits(path: Path) -> list[Edit]:
     if not path.exists():
         return []

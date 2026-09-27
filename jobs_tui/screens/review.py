@@ -1,6 +1,5 @@
 import difflib
 import json
-import re
 import threading
 from functools import partial
 
@@ -187,8 +186,7 @@ class ReviewScreen(Screen):
         return self.edits[lv.index] if self.edits and lv.index is not None else None
 
     def round_of(self, e: E.Edit) -> int:
-        m = re.search(r"-r(\d+)$", e.id)
-        return int(m.group(1)) if m else 0
+        return E.round_of_id(e.id)
 
     def previous_text(self, e: E.Edit) -> str | None:
         if not e.revises:
@@ -224,7 +222,7 @@ class ReviewScreen(Screen):
         prev_text = self.previous_text(e)
         if prev_text is not None:
             prev_comment = self.decisions.get(e.revises, E.Decision()).comment
-            previous = [f"[dim]PREVIOUS (r{self.round_of(e) - 1})[/dim]\n[dim]{escape(prev_text)}[/dim]", "",
+            previous = [f"[dim]PREVIOUS (r{E.round_of_id(e.revises)})[/dim]\n[dim]{escape(prev_text)}[/dim]", "",
                         f"[dim]YOUR COMMENT[/dim]\n{escape(prev_comment)}", ""]
         lines = [
             head, "",

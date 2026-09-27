@@ -1885,3 +1885,26 @@ async def test_v_without_previous_round_notifies(jobs_dir, reviewable):
         await pilot.press("v")
         await pilot.pause()
     assert "No previous round for this edit" in notices
+
+
+async def test_previous_label_uses_round_of_revised_id(jobs_dir, reviewable):
+    from jobs_tui.edits import Decision, save_feedback
+    from textual.widgets import ListView, Static
+    save_feedback(reviewable.review_feedback, {
+        "e1-r1": Decision("pending", comment="shorter", sent_proposed="Built a churn model r1"),
+        "e2": Decision("pending", comment="keep weekly", sent_proposed="Automated reporting"),
+    }, request={"round": 2, "items": []})
+    reviewable.proposed_edits.write_text(json.dumps({"edits": [
+        {"id": "e1-r3", "revises": "e1-r1", "path": "acme.b1.text", "current": "Built a churn model", "proposed": "Built churn model", "reason": "r"},
+        {"id": "e2-r3", "revises": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting", "proposed": "Automated weekly reports", "reason": "r"},
+    ]}))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        detail = app.screen.query_one("#edit-detail", Static)
+        assert "PREVIOUS (r1)" in detail.render().plain
+        app.screen.query_one("#edit-list", ListView).index = 1
+        await pilot.pause()
+        assert "PREVIOUS (r0)" in detail.render().plain
