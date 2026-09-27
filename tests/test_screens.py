@@ -1983,3 +1983,55 @@ async def test_review_f_opens_finalize(jobs_dir, reviewable, monkeypatch):
         await pilot.press("escape")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "ReviewScreen"
+
+
+async def test_v_refuses_sent_edit(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui.edits import Decision, load_feedback, save_feedback
+    from jobs_tui.model import Resume
+    from textual.widgets import Label, ListView
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
+    save_feedback(reviewable.review_feedback,
+                  {"e1": Decision("pending", comment="Keep the 8% figure", sent_proposed="Built and deployed a churn model")},
+                  request={"round": 1, "items": []})
+    reviewable.proposed_edits.write_text(json.dumps(REVISED_EDITS))
+    original = Resume.load(reviewable.resume_yaml).get("acme.b1.text")
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await comment_and_send(app, pilot, "shorter still")
+        notices.clear()
+        await pilot.press("v")
+        await pilot.pause(0.2)
+        rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
+        assert rows[0].startswith("◑")
+    assert "Sent for rework. Wait for the revision, or press u to withdraw." in notices
+    d = load_feedback(reviewable.review_feedback)["e1-r1"]
+    assert d.status == "pending" and d.sent_proposed == "Built a churn model that cut churn 8%"
+    assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == original
+
+
+async def test_send_feedback_relists_still_sent_edits(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui.edits import load_feedback, load_request
+    from textual.widgets import ListView
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await comment_and_send(app, pilot, "first")
+        req = load_request(reviewable.review_feedback)
+        assert req["round"] == 1 and [i["id"] for i in req["items"]] == ["e1"]
+        app.screen.query_one("#edit-list", ListView).index = 1
+        await pilot.pause()
+        await comment_and_send(app, pilot, "second")
+    req = load_request(reviewable.review_feedback)
+    assert req["round"] == 2
+    assert [(i["id"], i["action"]) for i in req["items"]] == [("e1", "revise"), ("e2", "revise")]
+    d = load_feedback(reviewable.review_feedback)
+    assert d["e1"].sent_proposed == "Built and deployed a churn model"
+    assert d["e2"].sent_proposed == "Automated reporting"

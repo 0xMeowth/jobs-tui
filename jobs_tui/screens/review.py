@@ -369,7 +369,7 @@ class ReviewScreen(Screen):
 
     def action_accept_previous(self) -> None:
         e = self.current()
-        if not e or self.refuse_if_accepted(e):
+        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e):
             return
         prev = self.previous_text(e)
         if prev is None:
@@ -412,7 +412,7 @@ class ReviewScreen(Screen):
         items = []
         for e in self.edits:
             d = self.decisions.get(e.id, E.Decision())
-            if states[e.id] == "rework":
+            if states[e.id] in ("rework", "sent"):
                 items.append({"id": e.id, "action": "revise", "comment": d.comment, "proposed": e.proposed})
                 self.decisions[e.id] = E.Decision(**{**d.__dict__, "sent_proposed": e.proposed})
             elif states[e.id] == "rejected_reason":
