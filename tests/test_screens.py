@@ -1965,3 +1965,21 @@ async def test_undo_legacy_add_refuses_with_nothing_recorded(jobs_dir, monkeypat
     assert p.resume_yaml.read_text() == before
     assert E.load_feedback(p.review_feedback)["n1"].status == "accepted"
     assert any("Nothing recorded" in n for n in notices)
+
+
+async def test_review_f_opens_finalize(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"
+        await pilot.press("f")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "FinalizeScreen"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ReviewScreen"

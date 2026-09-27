@@ -71,7 +71,7 @@ class CommentScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("[b]Comment for the agent[/b]  Pending edits are reworked. Rejected edits carry it as the reason. Empty clears it. s sends all comments.")
+            yield Label("[b]Comment for the agent[/b]  Pending edits are reworked. Rejected edits carry it as the reason. Empty clears it. s sends rework comments and reject reasons.")
             yield TextArea(self.text, id="comment")
             yield Static(edit_diff(self.edit), id="dialog-diff")
             with Horizontal():
@@ -110,6 +110,7 @@ class ReviewScreen(Screen):
         Binding("A", "accept_all", "Accept all pending"),
         Binding("s", "send_feedback", "Send feedback"),
         Binding("r", "render", "Render"),
+        Binding("f", "finalize", "Finalize"),
         Binding("escape", "back", "Back"),
     ]
 
@@ -122,7 +123,7 @@ class ReviewScreen(Screen):
         self._stop = threading.Event()
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · p pair · Esc back", classes="help")
+        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · f finalize · p pair · Esc back", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="edit-list")
             yield Static("", id="edit-detail")
@@ -423,6 +424,10 @@ class ReviewScreen(Screen):
     def action_render(self) -> None:
         from jobs_tui.screens.render_screen import RenderScreen
         self.app.push_screen(RenderScreen(self.p))
+
+    def action_finalize(self) -> None:
+        from jobs_tui.screens.finalize import FinalizeScreen
+        self.app.push_screen(FinalizeScreen(self.p), lambda ok: ok and self.app.pop_to_list())
 
     def action_back(self) -> None:
         self.app.pop_screen()
