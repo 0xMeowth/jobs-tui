@@ -343,8 +343,8 @@ class ReviewScreen(Screen):
         if e.op == "remove":
             self.app.notify("Can't undo a remove. Press y on the list to edit resume.yaml.")
             return
-        if e.op == "replace" and d.before is None:
-            self.app.notify("No recorded text to restore for this edit. Press y on the list to edit resume.yaml.")
+        if (e.op == "replace" and d.before is None) or (e.op == "add" and not d.applied_id):
+            self.app.notify("Nothing recorded to restore for this edit. Press y on the list to edit resume.yaml.")
             return
         try:
             resume = Resume.load(self.p.resume_yaml)
@@ -353,14 +353,14 @@ class ReviewScreen(Screen):
                     raise KeyError(E.label(e))
                 resume.set(e.path, d.before)
             else:
-                if not d.applied_id or not resume.has(d.applied_id) or resume.get(f"{d.applied_id}.text") != d.final:
-                    raise KeyError(d.applied_id or E.label(e))
+                if not resume.has(d.applied_id) or resume.get(f"{d.applied_id}.text") != d.final:
+                    raise KeyError(E.label(e))
                 resume.remove(d.applied_id)
         except (yaml.YAMLError, OSError) as err:
             self.app.notify(escape(f"Cannot read resume.yaml: {err}"), severity="error")
             return
-        except KeyError as err:
-            self.app.notify(f"resume.yaml changed since accept ({escape(str(err).strip(chr(39)))}). Undo the later edit first, or press y on the list.", severity="warning")
+        except KeyError:
+            self.app.notify(f"resume.yaml changed since accept ({escape(E.label(e))}). Undo the later edit first, or press y on the list.", severity="warning")
             return
         resume.save(self.p.resume_yaml)
         self.set_status(e, "pending", final=None, before=None, applied_id=None)

@@ -1701,7 +1701,7 @@ async def test_undo_replace_without_recorded_before_refuses(jobs_dir, reviewable
         await pilot.pause()
     assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
     assert E.load_feedback(reviewable.review_feedback)["e1"].status == "accepted"
-    assert any("No recorded text" in n for n in notices)
+    assert any("Nothing recorded" in n for n in notices)
 
 
 async def test_send_feedback_writes_request_block(jobs_dir, reviewable, monkeypatch):
@@ -1908,3 +1908,26 @@ async def test_previous_label_uses_round_of_revised_id(jobs_dir, reviewable):
         app.screen.query_one("#edit-list", ListView).index = 1
         await pilot.pause()
         assert "PREVIOUS (r0)" in detail.render().plain
+
+
+async def test_undo_legacy_add_refuses_with_nothing_recorded(jobs_dir, monkeypatch):
+    from jobs_tui import edits as E
+    from jobs_tui.model import Resume
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [
+        {"id": "n1", "op": "add", "entry": "acme", "after": "acme.b2", "current": "", "proposed": "Shipped a thing", "reason": "gap"}
+    ]}))
+    E.save_feedback(p.review_feedback, {"n1": E.Decision("accepted", final="Shipped a thing")})
+    before = p.resume_yaml.read_text()
+    app = JobsApp(jobs_dir)
+    notices = []
+    app.notify = lambda msg, **kw: notices.append(msg)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("u")
+        await pilot.pause()
+    assert p.resume_yaml.read_text() == before
+    assert E.load_feedback(p.review_feedback)["n1"].status == "accepted"
+    assert any("Nothing recorded" in n for n in notices)
