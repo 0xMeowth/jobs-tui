@@ -1437,3 +1437,37 @@ async def test_brief_request_has_method_and_default_focus(jobs_dir, two_apps):
     assert "exact phrase" in method and "Do not add any skill" in method and "wait for a reply" in method
     assert "## User focus\n\nOptimise this resume for the role.\n\n## Required output" in req
     assert "Maximise" not in req
+
+
+async def test_edit_dialog_shows_live_diff(jobs_dir, reviewable):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        from textual.widgets import Static, TextArea
+        assert app.screen.__class__.__name__ == "EditTextScreen"
+        diff = app.screen.query_one("#dialog-diff", Static)
+        plain = diff.render().plain
+        assert "Built" in plain and "deployed" in plain
+        box = app.screen.query_one("#edit-text", TextArea)
+        box.text = "Built a churn model quickly"
+        await pilot.pause()
+        plain = diff.render().plain
+        assert "quickly" in plain and "deployed" not in plain
+
+
+async def test_comment_dialog_shows_diff(jobs_dir, reviewable):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        from textual.widgets import Static
+        assert app.screen.__class__.__name__ == "CommentScreen"
+        plain = app.screen.query_one("#dialog-diff", Static).render().plain
+        assert "Built" in plain and "deployed" in plain

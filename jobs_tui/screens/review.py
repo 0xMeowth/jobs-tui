@@ -28,20 +28,33 @@ class FolderChanged(Message):
         self.names = names
 
 
+def edit_diff(e: "E.Edit", proposed: str | None = None) -> str:
+    proposed = e.proposed if proposed is None else proposed
+    if e.op == "replace":
+        return word_diff(e.current, proposed)
+    if e.op == "remove":
+        return "[red strike]" + escape(e.current) + "[/]"
+    return "[green]" + escape(proposed) + "[/]"
+
+
 class EditTextScreen(ModalScreen[str | None]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, edit: "E.Edit") -> None:
         super().__init__()
-        self.text = text
+        self.edit = edit
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             yield Label("[b]Edit proposal[/b]  Edit the wording, then accept")
-            yield TextArea(self.text, id="edit-text")
+            yield TextArea(self.edit.proposed, id="edit-text")
+            yield Static(edit_diff(self.edit), id="dialog-diff")
             with Horizontal():
                 yield Button("Accept", variant="primary", id="ok")
                 yield Button("Cancel", id="cancel")
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        self.query_one("#dialog-diff", Static).update(edit_diff(self.edit, event.text_area.text.strip()))
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -54,14 +67,16 @@ class EditTextScreen(ModalScreen[str | None]):
 class CommentScreen(ModalScreen[str | None]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, edit: "E.Edit", text: str) -> None:
         super().__init__()
+        self.edit = edit
         self.text = text
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             yield Label("[b]Feedback for the agent[/b]  Marks this edit for revision. s sends all feedback to the agent.")
             yield TextArea(self.text, id="comment")
+            yield Static(edit_diff(self.edit), id="dialog-diff")
             with Horizontal():
                 yield Button("Mark for revision", variant="primary", id="ok")
                 yield Button("Cancel", id="cancel")
@@ -174,7 +189,7 @@ class ReviewScreen(Screen):
     def show(self, e: E.Edit) -> None:
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
-        body = word_diff(e.current, e.proposed) if self.show_diff and e.op == "replace" else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
+        body = edit_diff(e) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
         head = f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}  · {c['pending']} pending, {c['accepted']} accepted, {c['rejected']} rejected, {c['needs_revision']} need revision"
         if c["pending"] == 0:
             head += "\n[b]All decided[/b] · r render · f finalize" + (" · s send feedback" if c["needs_revision"] else "")
@@ -254,12 +269,12 @@ class ReviewScreen(Screen):
         if e.op == "remove":
             self.app.notify("Remove edits can't be reworded")
             return
-        self.app.push_screen(EditTextScreen(e.proposed), lambda text: text is not None and self.apply(e, text))
+        self.app.push_screen(EditTextScreen(e), lambda text: text is not None and self.apply(e, text))
 
     def action_comment(self) -> None:
         if (e := self.current()) and not self.accepted(e):
             prev = self.decisions.get(e.id, E.Decision()).feedback
-            self.app.push_screen(CommentScreen(prev), lambda text: text is not None and self.decide(e, "needs_revision", feedback=text))
+            self.app.push_screen(CommentScreen(e, prev), lambda text: text is not None and self.decide(e, "needs_revision", feedback=text))
 
     def action_toggle_diff(self) -> None:
         self.show_diff = not self.show_diff
