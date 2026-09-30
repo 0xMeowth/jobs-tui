@@ -517,6 +517,16 @@ async def test_review_inline_edit_uses_final_text(jobs_dir, reviewable, monkeypa
         await pilot.pause(0.3)
         from jobs_tui.model import Resume
         assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "My own wording"
+        from textual.widgets import Label, ListView, Static
+        detail = app.screen.query_one("#edit-detail", Static).render().plain
+        assert "YOUR EDIT\nMy own wording" in detail
+        assert "Built and deployed" not in detail
+        rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
+        assert rows[0].startswith("● ✎") and not rows[1].startswith("● ✎")
+        await pilot.press("d")
+        await pilot.pause()
+        diff = app.screen.query_one("#edit-detail", Static).render().plain
+        assert "My own wording" in diff and "deployed" not in diff
 
 
 async def test_review_reloads_when_agent_rewrites_edits(jobs_dir, reviewable):
@@ -1903,6 +1913,13 @@ async def test_v_accepts_previous_wording(jobs_dir, reviewable, monkeypatch):
         await pilot.pause()
         await pilot.press("v")
         await pilot.pause(0.3)
+        await pilot.press("k")
+        await pilot.pause()
+        from textual.widgets import Label, ListView, Static
+        rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
+        assert rows[0].startswith("● acme.b1")
+        plain = app.screen.query_one("#edit-detail", Static).render().plain
+        assert "ACCEPTED (r0)\nBuilt and deployed a churn model" in plain and "YOUR EDIT" not in plain
     assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Built and deployed a churn model"
     d = load_feedback(reviewable.review_feedback)["e1-r1"]
     assert d.status == "accepted" and d.final == "Built and deployed a churn model"

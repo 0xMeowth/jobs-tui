@@ -169,7 +169,7 @@ class ReviewScreen(Screen):
         index = lv.index or 0
         await lv.clear()
         await lv.extend([
-            ListItem(Label(f"{E.GLYPH[E.state_of(e.id, self.decisions, e.proposed)]} {escape(text)}"), name=e.id)
+            ListItem(Label(f"{E.GLYPH[E.state_of(e.id, self.decisions, e.proposed)]} {'✎ ' if self.shown_text(e)[1] == 'YOUR EDIT' else ''}{escape(text)}"), name=e.id)
             for e, text in zip(self.edits, labels)
         ])
         if self.edits:
@@ -189,6 +189,14 @@ class ReviewScreen(Screen):
     def round_of(self, e: E.Edit) -> int:
         return E.round_of_id(e.id)
 
+    def shown_text(self, e: E.Edit) -> tuple[str, str]:
+        d = self.decisions.get(e.id, E.Decision())
+        if d.status != "accepted" or not d.final or d.final == e.proposed:
+            return e.proposed, "PROPOSED"
+        if d.final == self.previous_text(e):
+            return d.final, f"ACCEPTED (r{E.round_of_id(e.revises)})"
+        return d.final, "YOUR EDIT"
+
     def previous_text(self, e: E.Edit) -> str | None:
         if not e.revises:
             return None
@@ -197,7 +205,8 @@ class ReviewScreen(Screen):
     def show(self, e: E.Edit) -> None:
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
-        body = edit_diff(e) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]PROPOSED[/b]\n{escape(e.proposed)}"
+        shown, title = self.shown_text(e)
+        body = edit_diff(e, shown) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]{title}[/b]\n{escape(shown)}"
         state = E.state_of(e.id, self.decisions, e.proposed)
         head = (f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}" + (f"  · r{self.round_of(e)}" if e.revises else "")
                 + f"  · {c['open']} open, {c['rework']} rework" + (f", {c['sent']} sent" if c['sent'] else "")
@@ -217,8 +226,6 @@ class ReviewScreen(Screen):
             status.append("Rejected")
         elif state == "accepted":
             status.append("Accepted" + (f", comment not sent: {escape(d.comment)}" if d.comment else ""))
-        if d.final and d.final != e.proposed:
-            status.append(f"Final: {escape(d.final)}")
         previous = []
         prev_text = self.previous_text(e)
         if prev_text is not None:
