@@ -434,7 +434,9 @@ async def test_review_comment_and_send_feedback(jobs_dir, reviewable, monkeypatc
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, force=False: sent.append(text) or "sent")
     from jobs_tui.model import Resume
     original = Resume.load(reviewable.resume_yaml).get("acme.b1.text")
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("enter")
@@ -873,8 +875,7 @@ async def test_send_twice_to_busy_pane_forces(jobs_dir, monkeypatch):
 
 async def test_no_pane_notify_explains_pairing(jobs_dir, monkeypatch):
     from jobs_tui import bridge as bridge_mod
-    monkeypatch.setattr(bridge_mod, "copy_to_clipboard", lambda t: None)
-    monkeypatch.setenv("HERDR_ENV", "0")
+    monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -882,7 +883,32 @@ async def test_no_pane_notify_explains_pairing(jobs_dir, monkeypatch):
         app.send_to_agent("hello")
         await app.workers.wait_for_complete()
         await pilot.pause()
-    assert "No agent pane. Prompt copied to clipboard. Press p to pair a pane." in notes
+    assert "No agent paired. Press p to pair." in notes
+
+
+async def test_send_feedback_unpaired_refuses_before_saving(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui.edits import load_request
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        notes = record_notes(app)
+        await comment_and_send(app, pilot)
+    assert load_request(reviewable.review_feedback)["round"] == 0
+    assert "No agent paired. Press p to pair." in notes
+
+
+async def test_brief_start_disabled_when_unpaired(jobs_dir, two_apps):
+    from textual.widgets import Button, Label
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+        assert app.screen.query_one("#start", Button).disabled
+        assert any("press p to pair" in str(l.content) for l in app.screen.query(Label))
 
 
 async def test_p_opens_pair_dropdown(jobs_dir, two_apps, monkeypatch):
@@ -1322,9 +1348,10 @@ async def test_brief_prefills_from_saved_request(jobs_dir, two_apps):
 
 
 async def test_brief_start_opens_review(jobs_dir, two_apps, monkeypatch):
-    from jobs_tui import bridge as bridge_mod
-    monkeypatch.setattr(bridge_mod, "copy_to_clipboard", lambda t: None)
+    monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("b")
@@ -1471,7 +1498,9 @@ async def test_tracker_shows_empty_state(jobs_dir):
 async def test_send_feedback_with_nothing_to_revise_notifies(jobs_dir, reviewable, monkeypatch):
     sent = []
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: sent.append(text))
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     notices = []
     app.notify = lambda msg, **kw: notices.append(msg)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -1876,7 +1905,9 @@ async def test_send_feedback_writes_request_block(jobs_dir, reviewable, monkeypa
     from textual.widgets import TextArea
     sent = []
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: sent.append(text))
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("enter")
@@ -1919,7 +1950,9 @@ async def test_send_feedback_second_press_resends_same_text(jobs_dir, reviewable
     from jobs_tui.edits import load_request
     sent = []
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: sent.append(text))
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("enter")
@@ -1939,7 +1972,9 @@ async def test_sent_edit_refuses_verdicts_until_revision(jobs_dir, reviewable, m
     monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
     original = Resume.load(reviewable.resume_yaml).get("acme.b1.text")
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     notices = []
     app.notify = lambda msg, **kw: notices.append(msg)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -1971,7 +2006,9 @@ async def test_undo_withdraws_sent_edit(jobs_dir, reviewable, monkeypatch):
     from jobs_tui.edits import load_feedback
     from textual.widgets import Label, ListView
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     notices = []
     app.notify = lambda msg, **kw: notices.append(msg)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -2132,7 +2169,9 @@ async def test_v_refuses_sent_edit(jobs_dir, reviewable, monkeypatch):
                   request={"round": 1, "items": []})
     reviewable.proposed_edits.write_text(json.dumps(REVISED_EDITS))
     original = Resume.load(reviewable.resume_yaml).get("acme.b1.text")
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     notices = []
     app.notify = lambda msg, **kw: notices.append(msg)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -2155,7 +2194,9 @@ async def test_send_feedback_relists_still_sent_edits(jobs_dir, reviewable, monk
     from jobs_tui.edits import load_feedback, load_request
     from textual.widgets import ListView
     monkeypatch.setattr(JobsApp, "send_to_agent", lambda self, text, **kw: None)
+    two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("enter")

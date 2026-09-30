@@ -73,10 +73,6 @@ def run_in_pane(pane_id: str, text: str) -> None:
     _run(["pane", "run", pane_id, text])
 
 
-def copy_to_clipboard(text: str) -> None:
-    subprocess.run(["pbcopy"], input=text, text=True, check=False)
-
-
 def start_review_prompt(root: Path) -> str:
     return (
         f"Review the job application in {root}. Read review-request.md, jd.md and resume.yaml there. "
@@ -109,13 +105,11 @@ class Bridge:
     def deliver(self, text: str, force: bool = False) -> str:
         pane = self.pane()
         if pane is None:
-            copy_to_clipboard(text)
-            return "copied"
+            return "unpaired"
         if pane.status == BUSY and not force:
             return "busy"
         try:
             run_in_pane(pane.pane_id, text)
         except (RuntimeError, OSError):
-            copy_to_clipboard(text)
-            return "copied"
+            return "failed"
         return "sent"

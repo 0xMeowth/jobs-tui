@@ -23,7 +23,7 @@ class CommandBar(Widget):
         app: JobsApp = self.app  # type: ignore[assignment]
         options = app.pane_options
         value = app.bridge.pane_id if app.bridge.pane_id in [v for _, v in options] else Select.NULL
-        yield Select(options, value=value, allow_blank=True, prompt="No agent: prompts copy to clipboard", id="agent-pane")
+        yield Select(options, value=value, allow_blank=True, prompt="No agent: press p to pair", id="agent-pane")
         yield Static("", id="agent-state")
 
     def on_mount(self) -> None:
@@ -152,6 +152,15 @@ class JobsApp(App):
         if isinstance(select := self._enter_bar("#agent-pane"), Select):
             select.action_show_overlay()
 
+    def unpaired_message(self) -> str:
+        return "No agent paired. Press p to pair." if bridge.in_herdr() else "Not running inside herdr. Start the app in a herdr pane to reach the agent."
+
+    def require_pane(self) -> bool:
+        if self.bridge.pane_id:
+            return True
+        self.notify(self.unpaired_message(), severity="warning")
+        return False
+
     def pop_to_list(self) -> None:
         from jobs_tui.screens.applications import ApplicationsScreen
         while len(self.screen_stack) > 1 and not isinstance(self.screen, ApplicationsScreen):
@@ -170,9 +179,10 @@ class JobsApp(App):
         messages = {
             "sent": "Sent to agent pane",
             "busy": "Agent pane is working. Press again to force, or wait.",
-            "copied": "No agent pane. Prompt copied to clipboard. Press p to pair a pane.",
+            "unpaired": self.unpaired_message(),
+            "failed": "Could not send to the agent pane. Press p to pair again.",
         }
-        self.notify(messages[outcome], severity="warning" if outcome != "sent" else "information")
+        self.notify(messages[outcome], severity={"sent": "information", "failed": "error"}.get(outcome, "warning"))
 
     def set_pages(self, n: int | None) -> None:
         self.pages = n

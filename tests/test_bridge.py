@@ -105,17 +105,13 @@ def test_deliver_sends_when_idle_agent_reports_unknown(fake_run, monkeypatch):
     assert sent == [["pane", "run", "wK:p1", "x"]]
 
 
-def test_deliver_copies_when_run_fails(fake_run, monkeypatch):
+def test_deliver_fails_when_run_fails(fake_run, monkeypatch):
     monkeypatch.setenv("HERDR_ENV", "1")
     monkeypatch.setattr(bridge.shutil, "which", lambda n: "/x/herdr")
     def boom(pane_id, text):
         raise RuntimeError("gone")
     monkeypatch.setattr(bridge, "run_in_pane", boom)
-    copied = []
-    monkeypatch.setattr(bridge, "copy_to_clipboard", lambda t: copied.append(t))
-    b = bridge.Bridge(pane_id="wK:p1")
-    assert b.deliver("hello") == "copied"
-    assert copied == ["hello"]
+    assert bridge.Bridge(pane_id="wK:p1").deliver("hello") == "failed"
 
 
 def test_list_agent_panes_returns_empty_on_failure(monkeypatch):
@@ -125,12 +121,9 @@ def test_list_agent_panes_returns_empty_on_failure(monkeypatch):
     assert bridge.list_agent_panes() == []
 
 
-def test_deliver_copies_when_no_pane(monkeypatch):
+def test_deliver_unpaired_when_no_pane(monkeypatch):
     monkeypatch.setenv("HERDR_ENV", "0")
-    copied = []
-    monkeypatch.setattr(bridge, "copy_to_clipboard", lambda t: copied.append(t))
-    assert bridge.Bridge(pane_id=None).deliver("text") == "copied"
-    assert copied == ["text"]
+    assert bridge.Bridge(pane_id=None).deliver("text") == "unpaired"
 
 
 def test_prompts_mention_folder_and_files():

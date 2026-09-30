@@ -430,6 +430,8 @@ class ReviewScreen(Screen):
         self.rerender()
 
     def action_send_feedback(self) -> None:
+        if not self.app.require_pane():
+            return
         states = {e.id: E.state_of(e.id, self.decisions, e.proposed) for e in self.edits}
         stored = E.load_request(self.p.review_feedback)
         if not any(s == "rework" for s in states.values()):

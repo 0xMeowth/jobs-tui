@@ -8,7 +8,7 @@ Terminal app for tailoring one resume per job application. You keep a master res
 - `typst`, `pdfinfo` and `pdftoppm` on your PATH. `brew install typst poppler`, or download the Typst release binary into `~/.local/bin`.
 - The Nunito font for the default template: `brew install --cask font-nunito`.
 - Optional: Google Chrome. Job pages that block plain HTTP fetches fall back to a browser.
-- Optional: herdr with a Codex or Claude Code pane. Without it the app copies prompts to the clipboard for you to paste.
+- herdr with a Codex or Claude Code pane. The app sends review prompts to that pane. Outside herdr you can still review and render, but not reach the agent.
 
 ## Install
 
@@ -62,7 +62,7 @@ Terminal app for tailoring one resume per job application. You keep a master res
 
 ## Daily use
 
-Open the app in one herdr pane and your agent in another. On launch the app asks you to pick the agent pane. Press `p` later to change it. Keys are listed at the top of every screen.
+Open the app in one herdr pane and your agent in another. On launch the app asks you to pick the agent pane. Press `p` later to change it. Sending with `s` or Start review is refused until a pane is paired. Keys are listed at the top of every screen.
 
 - `n` new application. Paste the posting URL and press Enter. Company and role fill in from the page, and you can correct them before the folder is created. LinkedIn URLs use the public guest endpoint. Other sites are fetched over HTTP, then with Chrome if needed. No URL? Paste the description and type company and role yourself.
 - If no agent pane is paired yet, a dialog asks you to pick one. Then the brief dialog opens. Say what the agent should focus on, then press Start review. The app writes `review-request.md` into the application folder and tells the agent to read it.
