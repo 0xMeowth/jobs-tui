@@ -1167,7 +1167,7 @@ async def test_reject_and_comment_refuse_accepted_edit(jobs_dir, reviewable, mon
     assert notices.count("Press u to undo accept first") == 2
 
 
-async def test_reject_keeps_comment_and_comment_keeps_reject(jobs_dir, reviewable):
+async def test_comment_on_rejected_edit_asks_for_rework(jobs_dir, reviewable):
     from jobs_tui.edits import load_feedback
     from textual.widgets import TextArea
     app = JobsApp(jobs_dir)
@@ -1175,26 +1175,69 @@ async def test_reject_keeps_comment_and_comment_keeps_reject(jobs_dir, reviewabl
         await pilot.pause()
         await pilot.press("enter")
         await pilot.pause()
-        await pilot.press("c")
+        await pilot.press("x")
         await pilot.pause()
-        app.screen.query_one("#comment", TextArea).text = "Never used it in prod."
+        await pilot.press("up", "c")
+        await pilot.pause()
+        app.screen.query_one("#comment", TextArea).text = "Mention the 8% figure."
         await pilot.click("#ok")
         await pilot.pause()
-        await pilot.press("up")
+        d = load_feedback(reviewable.review_feedback)["e1"]
+        assert d.status == "pending" and d.comment == "Mention the 8% figure."
+
+
+async def test_empty_comment_on_rejected_edit_keeps_reject(jobs_dir, reviewable):
+    from jobs_tui.edits import load_feedback
+    from textual.widgets import TextArea
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
         await pilot.pause()
         await pilot.press("x")
         await pilot.pause()
-        d = load_feedback(reviewable.review_feedback)["e1"]
-        assert d.status == "rejected" and d.comment == "Never used it in prod."
-        await pilot.press("up")
+        await pilot.press("up", "c")
         await pilot.pause()
-        await pilot.press("c")
-        await pilot.pause()
-        app.screen.query_one("#comment", TextArea).text = "Changed my reason."
+        app.screen.query_one("#comment", TextArea).text = ""
         await pilot.click("#ok")
         await pilot.pause()
-        d = load_feedback(reviewable.review_feedback)["e1"]
-        assert d.status == "rejected" and d.comment == "Changed my reason."
+        assert load_feedback(reviewable.review_feedback)["e1"].status == "rejected"
+
+
+async def comment_then_reject(app, pilot, button):
+    from textual.widgets import TextArea
+    await pilot.pause()
+    await pilot.press("enter")
+    await pilot.pause()
+    await pilot.press("c")
+    await pilot.pause()
+    app.screen.query_one("#comment", TextArea).text = "Never used it in prod."
+    await pilot.click("#ok")
+    await pilot.pause()
+    await pilot.press("x")
+    await pilot.pause()
+    assert app.screen.__class__.__name__ == "ConfirmRejectScreen"
+    await pilot.click(button)
+    await pilot.pause()
+    assert app.screen.__class__.__name__ == "ReviewScreen"
+
+
+async def test_reject_commented_edit_confirms_and_discards_comment(jobs_dir, reviewable):
+    from jobs_tui.edits import load_feedback
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await comment_then_reject(app, pilot, "#yes")
+    d = load_feedback(reviewable.review_feedback)["e1"]
+    assert d.status == "rejected" and d.comment == ""
+
+
+async def test_reject_commented_edit_can_keep_comment(jobs_dir, reviewable):
+    from jobs_tui.edits import load_feedback
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await comment_then_reject(app, pilot, "#no")
+    d = load_feedback(reviewable.review_feedback)["e1"]
+    assert d.status == "pending" and d.comment == "Never used it in prod."
 
 
 async def test_list_glyphs_follow_derived_state(jobs_dir, reviewable, monkeypatch):
@@ -1221,7 +1264,7 @@ async def test_list_glyphs_follow_derived_state(jobs_dir, reviewable, monkeypatc
         await pilot.click("#ok")
         await pilot.pause()
         rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
-        assert rows[1].startswith("⊗")
+        assert rows[1].startswith("◐")
 
 
 async def test_busy_agent_keeps_typed_message(jobs_dir, two_apps, monkeypatch):
@@ -1824,12 +1867,7 @@ async def test_send_feedback_writes_request_block(jobs_dir, reviewable, monkeypa
         app.screen.query_one("#comment", TextArea).text = "Keep the 8% figure"
         await pilot.click("#ok")
         await pilot.pause()
-        await pilot.press("down", "c")
-        await pilot.pause()
-        app.screen.query_one("#comment", TextArea).text = "Not true"
-        await pilot.click("#ok")
-        await pilot.pause()
-        await pilot.press("x")
+        await pilot.press("down", "x")
         await pilot.pause()
         await pilot.press("s")
         await pilot.pause()
@@ -1837,7 +1875,6 @@ async def test_send_feedback_writes_request_block(jobs_dir, reviewable, monkeypa
         assert req["round"] == 1
         assert req["items"] == [
             {"id": "e1", "action": "revise", "comment": "Keep the 8% figure", "proposed": "Built and deployed a churn model"},
-            {"id": "e2", "action": "rejected", "comment": "Not true", "proposed": "Automated reporting"},
         ]
         assert load_feedback(reviewable.review_feedback)["e1"].sent_proposed == "Built and deployed a churn model"
         assert load_feedback(reviewable.review_feedback)["e2"].sent_proposed is None

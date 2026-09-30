@@ -6,8 +6,8 @@ from pathlib import Path
 from jobs_tui.model import split_path
 
 STATUSES = ("pending", "accepted", "rejected")
-STATES = ("open", "rework", "sent", "rejected", "rejected_reason", "accepted")
-GLYPH = {"open": "○", "rework": "◐", "sent": "◑", "rejected": "×", "rejected_reason": "⊗", "accepted": "●"}
+STATES = ("open", "rework", "sent", "rejected", "accepted")
+GLYPH = {"open": "○", "rework": "◐", "sent": "◑", "rejected": "×", "accepted": "●"}
 
 
 @dataclass
@@ -92,7 +92,7 @@ def state_of(edit_id: str, decisions: dict[str, Decision], proposed: str | None 
     if d.status == "accepted":
         return "accepted"
     if d.status == "rejected":
-        return "rejected_reason" if d.comment else "rejected"
+        return "rejected"
     if d.comment and proposed is not None and d.sent_proposed == proposed:
         return "sent"
     return "rework" if d.comment else "open"

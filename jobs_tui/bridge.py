@@ -91,7 +91,6 @@ def feedback_prompt(root: Path, round: int) -> str:
         f'For each item with action "revise", replace that edit in proposed-edits.json with exactly one new edit that '
         f'addresses my comment, with id "<base>-r{round}" (base is the item id without any -rN suffix) and '
         f'"revises": "<item id>", in the same list position. '
-        'For each item with action "rejected", leave that edit unchanged and do not propose that change again in any later round. '
         'Leave every edit not listed in "request" exactly as it is. '
         'If a comment cannot be met without adding facts absent from resume.yaml, write the closest honest revision and name the missing fact in its reason. '
         'Do not ask me questions. Do not edit resume.yaml.'

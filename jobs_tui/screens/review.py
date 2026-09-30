@@ -71,7 +71,7 @@ class CommentScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("[b]Comment for the agent[/b]  Pending edits are reworked. Rejected edits carry it as the reason. Empty clears it. s sends rework comments and reject reasons.")
+            yield Label("[b]Comment for the agent[/b]  The agent reworks this edit, rejected or not. Empty clears it. s sends rework comments.")
             yield TextArea(self.text, id="comment")
             yield Static(edit_diff(self.edit), id="dialog-diff")
             with Horizontal():
@@ -83,6 +83,23 @@ class CommentScreen(ModalScreen[str | None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(self.query_one("#comment", TextArea).text.strip() if event.button.id == "ok" else None)
+
+
+class ConfirmRejectScreen(ModalScreen[bool]):
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label("[b]Discard your comment and reject this edit?[/b]  The original wording stays.")
+            with Horizontal():
+                yield Button("Reject", variant="error", id="yes")
+                yield Button("Keep comment", id="no")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "yes")
 
 
 def word_diff(a: str, b: str) -> str:
@@ -210,7 +227,7 @@ class ReviewScreen(Screen):
         state = E.state_of(e.id, self.decisions, e.proposed)
         head = (f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}" + (f"  · r{self.round_of(e)}" if e.revises else "")
                 + f"  · {c['open']} open, {c['rework']} rework" + (f", {c['sent']} sent" if c['sent'] else "")
-                + f", {c['accepted']} accepted, {c['rejected'] + c['rejected_reason']} rejected")
+                + f", {c['accepted']} accepted, {c['rejected']} rejected")
         if c["pending"] == 0:
             head += "\n[b]All decided[/b] · r render · f finalize"
         elif c["rework"]:
@@ -220,8 +237,6 @@ class ReviewScreen(Screen):
             status.append(f"Rework, sent with s: {escape(d.comment)}")
         elif state == "sent":
             status.append(f"Sent for rework, waiting for the agent: {escape(d.comment)}")
-        elif state == "rejected_reason":
-            status.append(f"Rejected, reason sent with s: {escape(d.comment)}")
         elif state == "rejected":
             status.append("Rejected")
         elif state == "accepted":
@@ -256,7 +271,7 @@ class ReviewScreen(Screen):
 
     def set_comment(self, e: E.Edit, text: str) -> None:
         prev = self.decisions.get(e.id, E.Decision())
-        self.set_status(e, prev.status, comment=text)
+        self.set_status(e, "pending" if text and prev.status == "rejected" else prev.status, comment=text)
 
     def refuse_if_accepted(self, e: E.Edit) -> bool:
         if E.status_of(e.id, self.decisions) == "accepted":
@@ -314,7 +329,13 @@ class ReviewScreen(Screen):
         if E.status_of(e.id, self.decisions) == "rejected":
             self.app.notify("Already rejected")
             return
-        self.set_status(e, "rejected")
+        if self.decisions.get(e.id, E.Decision()).comment:
+            self.app.push_screen(ConfirmRejectScreen(), lambda ok: ok and self.reject(e))
+            return
+        self.reject(e)
+
+    def reject(self, e: E.Edit) -> None:
+        self.set_status(e, "rejected", comment="")
         self.action_next()
 
     def action_edit(self) -> None:
@@ -422,8 +443,6 @@ class ReviewScreen(Screen):
             if states[e.id] in ("rework", "sent"):
                 items.append({"id": e.id, "action": "revise", "comment": d.comment, "proposed": e.proposed})
                 self.decisions[e.id] = E.Decision(**{**d.__dict__, "sent_proposed": e.proposed})
-            elif states[e.id] == "rejected_reason":
-                items.append({"id": e.id, "action": "rejected", "comment": d.comment, "proposed": e.proposed})
         E.save_feedback(self.p.review_feedback, self.decisions, request={"round": round_no, "items": items})
         self.app.send_to_agent(bridge.feedback_prompt(self.p.root, round_no))
         self.call_later(self.reload)

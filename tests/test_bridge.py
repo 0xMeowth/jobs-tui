@@ -141,7 +141,7 @@ def test_feedback_prompt_is_deterministic_per_action():
     assert str(root) in f
     assert '"request" block in review-feedback.json' in f
     assert 'action "revise"' in f and '"<base>-r2"' in f and '"revises"' in f
-    assert 'action "rejected"' in f and "do not propose that change again" in f
+    assert '"rejected"' not in f
     assert "Leave every edit not listed" in f
     assert "Do not ask me questions" in f and "Do not edit resume.yaml" in f
     t = bridge.trim_prompt(root, 3)
