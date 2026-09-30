@@ -95,6 +95,16 @@ def test_deliver_busy_when_working_unless_forced(fake_run, monkeypatch):
     assert b.deliver("x", force=True) == "sent"
 
 
+def test_deliver_sends_when_idle_agent_reports_unknown(fake_run, monkeypatch):
+    monkeypatch.setenv("HERDR_ENV", "1")
+    monkeypatch.setattr(bridge.shutil, "which", lambda n: "/x/herdr")
+    idle = dict(GET); idle["result"] = {"pane": {**GET["result"]["pane"], "agent_status": "unknown"}}
+    sent = []
+    monkeypatch.setattr(bridge, "_run", lambda args: json.dumps(idle) if args[:2] == ["pane", "get"] else sent.append(args) or "")
+    assert bridge.Bridge(pane_id="wK:p1").deliver("x") == "sent"
+    assert sent == [["pane", "run", "wK:p1", "x"]]
+
+
 def test_deliver_copies_when_run_fails(fake_run, monkeypatch):
     monkeypatch.setenv("HERDR_ENV", "1")
     monkeypatch.setattr(bridge.shutil, "which", lambda n: "/x/herdr")

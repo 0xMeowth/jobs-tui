@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 AGENTS = {"codex", "claude"}
-READY = {"idle", "blocked", "done"}
+BUSY = "working"
 
 
 @dataclass
@@ -111,7 +111,7 @@ class Bridge:
         if pane is None:
             copy_to_clipboard(text)
             return "copied"
-        if pane.status not in READY and not force:
+        if pane.status == BUSY and not force:
             return "busy"
         try:
             run_in_pane(pane.pane_id, text)
