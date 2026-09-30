@@ -67,8 +67,8 @@ Open the app in one herdr pane and your agent in another. Press `p` in the app a
 - `n` new application. Paste the posting URL and press Enter. Company and role fill in from the page, and you can correct them before the folder is created. LinkedIn URLs use the public guest endpoint. Other sites are fetched over HTTP, then with Chrome if needed. No URL? Paste the description and type company and role yourself.
 - If no agent pane is paired yet, a dialog asks you to pick one. Then the brief dialog opens. Say what the agent should focus on, then press Start review. The app writes `review-request.md` into the application folder and tells the agent to read it.
 - The review screen fills as the agent writes `proposed-edits.json`. `a` accepts and writes resume.yaml, `x` rejects, `e` lets you reword before accepting, `c` attaches a comment. A comment on a pending edit asks for a rework. A comment on a rejected edit is the reason, sent along so the agent never proposes it again. `u` undoes any verdict, and reverts an accepted replace or add if the bullet is unchanged since. Removes cannot be reverted. `s` sends rework comments and reject reasons in one round, and marks the reworked edits as sent until the revision arrives. Revised edits show the previous wording, and `v` accepts that instead.
-- `r` renders the PDF and shows the page count. `a` on that screen tightens spacing. `t` asks the agent to trim content.
-- `f` finalizes once the PDF fits two pages. It copies the PDF to `resume-submitted.pdf`, records the date, and adds a row to `tracker.md`.
+- `r` renders `resume.pdf` and shows the page count. `a` on that screen tightens spacing. `t` asks the agent to trim content. `s` saves a copy of the PDF under a name you choose, in the application folder, once it fits two pages.
+- `f` finalizes after you submit. It records the date and adds a row to `tracker.md`.
 - `:` sends a free text message to the agent about the selected application.
 - `x` on the list deletes a draft after confirmation. Submitted applications cannot be deleted.
 
@@ -86,7 +86,7 @@ Open the app in one herdr pane and your agent in another. Press `p` in the app a
         proposed-edits.json           written by the agent
         review-feedback.json          your decisions
         resume.pdf                    latest render
-        resume-submitted.pdf          copy taken at finalize
+        <name>.pdf                    copies saved with s on the render screen
 
 ## Other commands
 

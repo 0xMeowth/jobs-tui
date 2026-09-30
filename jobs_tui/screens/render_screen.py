@@ -18,6 +18,7 @@ class RenderScreen(Screen):
         Binding("o", "open_pdf", "Open PDF"),
         Binding("a", "autofit", "Auto-fit"),
         Binding("t", "trim", "Ask agent to trim"),
+        Binding("s", "save", "Save PDF"),
         Binding("f", "finalize", "Finalize"),
         Binding("escape", "back", "Back"),
     ]
@@ -29,7 +30,7 @@ class RenderScreen(Screen):
         self._gen = 0
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]RENDER[/b]  o open PDF · a auto-fit · t ask agent to trim · f finalize · p pair · Esc back", classes="help")
+        yield Static("[b]RENDER[/b]  o open PDF · a auto-fit · t ask agent to trim · s save PDF · f finalize · p pair · Esc back", classes="help")
         yield Static("Rendering…", id="render-info")
         yield CommandBar()
 
@@ -85,6 +86,10 @@ class RenderScreen(Screen):
             self.app.notify("Render has not finished yet")
             return
         self.app.send_to_agent(bridge.trim_prompt(self.p.root, self.result.pages))
+
+    def action_save(self) -> None:
+        from jobs_tui.screens.finalize import SaveScreen
+        self.app.push_screen(SaveScreen(self.p))
 
     def action_finalize(self) -> None:
         from jobs_tui.screens.finalize import FinalizeScreen

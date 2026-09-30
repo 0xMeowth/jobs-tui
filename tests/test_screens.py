@@ -653,11 +653,9 @@ async def test_render_screen_ignores_superseded_render(jobs_dir, reviewable, mon
         assert "Pages       2" in str(info.content) and app.pages == 2
 
 
-async def test_finalize_records_submission(jobs_dir, reviewable, monkeypatch):
+async def test_finalize_records_submission(jobs_dir, reviewable):
     from datetime import date
-    from jobs_tui import render, tracker
-    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
-    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+    from jobs_tui import tracker
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -666,30 +664,28 @@ async def test_finalize_records_submission(jobs_dir, reviewable, monkeypatch):
         assert app.screen.__class__.__name__ == "FinalizeScreen"
         await pilot.click("#yes")
         await pilot.pause()
-    assert reviewable.submitted_pdf.read_bytes() == b"%PDF-1.4 fake"
+    assert not (reviewable.root / "resume-submitted.pdf").exists()
     assert application.load(reviewable).submitted_date == date.today().isoformat()
     rows = tracker.read(paths.tracker_md(jobs_dir))
     assert rows[0].company == "Acme" and rows[0].folder == "companies/acme/analyst/"
 
 
-async def test_finalize_refuses_three_pages(jobs_dir, reviewable, monkeypatch):
-    from jobs_tui import render
-    reviewable.resume_pdf.write_bytes(b"%PDF")
-    monkeypatch.setattr(render, "page_count", lambda pdf: 3)
+async def test_finalize_refuses_submitted_application(jobs_dir, reviewable):
+    meta = application.load(reviewable)
+    meta.submitted_date = "2026-09-01"
+    application.save(reviewable, meta)
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("f")
         await pilot.pause()
-        from textual.widgets import Button
+        from textual.widgets import Button, Static
         assert app.screen.query_one("#yes", Button).disabled
-    assert not reviewable.submitted_pdf.exists()
+        assert "already finalized" in app.screen.query_one("#finalize-info", Static).render().plain
 
 
 async def test_finalize_rolls_back_on_tracker_error(jobs_dir, reviewable, monkeypatch):
-    from jobs_tui import render, tracker
-    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
-    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+    from jobs_tui import tracker
 
     def fail(path, row):
         raise OSError("disk full")
@@ -705,15 +701,12 @@ async def test_finalize_rolls_back_on_tracker_error(jobs_dir, reviewable, monkey
         assert app.screen.__class__.__name__ == "FinalizeScreen"
         from textual.widgets import Button
         assert not app.screen.query_one("#yes", Button).disabled
-    assert not reviewable.submitted_pdf.exists()
     assert application.load(reviewable).submitted_date is None
     assert tracker.read(paths.tracker_md(jobs_dir)) == []
 
 
-async def test_finalize_double_click_records_once(jobs_dir, reviewable, monkeypatch):
-    from jobs_tui import render, tracker
-    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
-    monkeypatch.setattr(render, "page_count", lambda pdf: 2)
+async def test_finalize_double_click_records_once(jobs_dir, reviewable):
+    from jobs_tui import tracker
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
@@ -725,7 +718,79 @@ async def test_finalize_double_click_records_once(jobs_dir, reviewable, monkeypa
         await pilot.click(offset=at)
         await pilot.pause()
     assert len(tracker.read(paths.tracker_md(jobs_dir))) == 1
-    assert reviewable.submitted_pdf.read_bytes() == b"%PDF-1.4 fake"
+
+
+async def open_save(pilot, monkeypatch, pages=2):
+    from jobs_tui import render
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, pages))
+    monkeypatch.setattr(render, "page_count", lambda pdf: pages)
+    await pilot.pause()
+    await pilot.press("r")
+    await pilot.pause()
+    await pilot.press("s")
+    await pilot.pause()
+
+
+async def test_save_copies_pdf_under_chosen_name(jobs_dir, reviewable, monkeypatch):
+    from textual.widgets import Input
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch)
+        assert app.screen.__class__.__name__ == "SaveScreen"
+        name = app.screen.query_one("#save-name", Input)
+        assert name.value == "acme-analyst.pdf"
+        name.value = "my cv"
+        await pilot.click("#save")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "RenderScreen"
+    assert (reviewable.root / "my cv.pdf").read_bytes() == b"%PDF-1.4 fake"
+    assert application.load(reviewable).submitted_date is None
+
+
+async def test_save_asks_before_overwrite(jobs_dir, reviewable, monkeypatch):
+    from textual.widgets import Button, Static
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 new")
+    (reviewable.root / "acme-analyst.pdf").write_bytes(b"old")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch)
+        await pilot.click("#save")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "SaveScreen"
+        assert "exists" in app.screen.query_one("#save-info", Static).render().plain
+        assert str(app.screen.query_one("#save", Button).label) == "Overwrite"
+        assert (reviewable.root / "acme-analyst.pdf").read_bytes() == b"old"
+        await pilot.pause(0.3)
+        await pilot.click("#save")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "RenderScreen"
+    assert (reviewable.root / "acme-analyst.pdf").read_bytes() == b"%PDF-1.4 new"
+
+
+async def test_save_rejects_paths_and_render_output(jobs_dir, reviewable, monkeypatch):
+    from textual.widgets import Input, Static
+    reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch)
+        for bad in ("../x.pdf", "sub/x.pdf", "resume.pdf", "  "):
+            app.screen.query_one("#save-name", Input).value = bad
+            await pilot.click("#save")
+            await pilot.pause(0.3)
+            assert app.screen.__class__.__name__ == "SaveScreen", bad
+            assert app.screen.query_one("#save-info", Static).render().plain
+    assert sorted(f.name for f in reviewable.root.glob("*.pdf")) == ["resume.pdf"]
+    assert not (jobs_dir / "companies" / "acme" / "x.pdf").exists()
+
+
+async def test_save_refuses_three_pages(jobs_dir, reviewable, monkeypatch):
+    from textual.widgets import Button
+    reviewable.resume_pdf.write_bytes(b"%PDF")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch, pages=3)
+        assert app.screen.query_one("#save", Button).disabled
 
 
 async def test_tracker_screen_lists_rows(jobs_dir, two_apps):
@@ -1228,7 +1293,7 @@ async def test_finalize_from_render_returns_to_list(jobs_dir, reviewable, monkey
         await pilot.click("#yes")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
-        assert reviewable.submitted_pdf.exists()
+    assert application.load(reviewable).submitted_date
 
 
 async def test_edit_yaml_rerenders_and_refreshes(jobs_dir, reviewable, monkeypatch):
@@ -1266,10 +1331,6 @@ async def test_page_count_is_singular_for_one_page(jobs_dir, reviewable, monkeyp
             if "page" in str(state.content):
                 break
         assert str(state.content) == "1 page"
-        await pilot.press("f")
-        await pilot.pause()
-        info = app.screen.query_one("#finalize-info", Static).render().plain
-        assert "1 page." in info and "1 pages" not in info
 
 
 async def test_delete_dialog_shows_relative_folder(jobs_dir, two_apps):

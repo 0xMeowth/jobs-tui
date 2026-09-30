@@ -33,7 +33,6 @@ def test_app_paths(jobs_dir):
     assert p.review_feedback == p.root / "review-feedback.json"
     assert p.resume_pdf == p.root / "resume.pdf"
     assert p.preview_dir == p.root / "preview"
-    assert p.submitted_pdf == p.root / "resume-submitted.pdf"
     assert p.company_slug == "northwind" and p.role_slug == "ai-analyst"
 
 
