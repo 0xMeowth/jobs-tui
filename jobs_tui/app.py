@@ -97,7 +97,8 @@ class CommandBar(Widget):
         if not self.is_mounted:
             return
         app: JobsApp = self.app  # type: ignore[assignment]
-        parts = [escape(pane.status) if pane else "", pages_text(app.pages) if app.pages is not None else ""]
+        status = (pane.status if pane.status in ("working", "blocked") else "idle") if pane else ""
+        parts = [status, pages_text(app.pages) if app.pages is not None else ""]
         self.query_one("#agent-state", Static).update(" · ".join(x for x in parts if x))
 
     def on_key(self, event: Key) -> None:

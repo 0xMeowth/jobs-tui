@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 from rich.markup import escape
 from textual import work
@@ -10,6 +11,10 @@ from textual.widgets import Static
 from jobs_tui import render
 from jobs_tui.app import CommandBar
 from jobs_tui.paths import AppPaths
+
+
+def open_pdf(path: Path) -> None:
+    subprocess.Popen(["open", str(path)])
 
 
 class RenderScreen(Screen):
@@ -57,10 +62,11 @@ class RenderScreen(Screen):
         over = r.pages - 2
         self.query_one("#render-info", Static).update(
             f"Pages       {r.pages}  (limit 2)" + ("  [red]over by " + str(over) + "[/red]" if over > 0 else "  [green]ok[/green]"))
+        self.action_open_pdf()
 
     def action_open_pdf(self) -> None:
         if self.p.resume_pdf.exists():
-            subprocess.Popen(["open", str(self.p.resume_pdf)])
+            open_pdf(self.p.resume_pdf)
 
     def action_save(self) -> None:
         from jobs_tui.screens.finalize import SaveScreen

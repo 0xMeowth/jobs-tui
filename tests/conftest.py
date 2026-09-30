@@ -19,4 +19,6 @@ def jobs_dir(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("HERDR_ENV", "0")
     from jobs_tui.app import JobsApp
     monkeypatch.setattr(JobsApp, "pair_on_launch", False, raising=False)
+    from jobs_tui.screens import render_screen
+    monkeypatch.setattr(render_screen, "open_pdf", lambda path: None, raising=False)
     return jobs

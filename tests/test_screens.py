@@ -194,6 +194,57 @@ async def wait_for_options(pilot, select, n):
     assert len(select._options) - 1 == n
 
 
+async def test_status_shows_idle_for_unknown_agent_status(jobs_dir, monkeypatch):
+    from jobs_tui import bridge as bridge_mod
+    pane = bridge_mod.Pane("wK:p1", "codex", "unknown", "/j", "t", "jobs")
+    monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
+    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
+    monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane)
+    app = JobsApp(jobs_dir)
+    app.bridge.pane_id = "wK:p1"
+    async with app.run_test(size=(160, 40)) as pilot:
+        from textual.widgets import Static
+        state = app.screen.query_one("#agent-state", Static)
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if str(state.content):
+                break
+        assert str(state.content) == "idle"
+
+
+async def test_render_opens_pdf_after_success(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.screens import render_screen
+    opened = []
+    monkeypatch.setattr(render_screen, "open_pdf", opened.append)
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    reviewable.resume_pdf.write_bytes(b"%PDF")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause(0.3)
+    assert opened == [reviewable.resume_pdf]
+
+
+async def test_failed_render_does_not_open_pdf(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.screens import render_screen
+    opened = []
+    monkeypatch.setattr(render_screen, "open_pdf", opened.append)
+
+    def fail(jobs, p):
+        raise render.RenderError("typst failed")
+
+    monkeypatch.setattr(render, "render", fail)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause(0.3)
+    assert opened == []
+
+
 async def test_command_bar_lists_panes_and_pairs(jobs_dir, monkeypatch):
     two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)
