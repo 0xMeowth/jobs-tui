@@ -1,6 +1,9 @@
 Screen { layout: vertical; }
 #body { height: 1fr; }
 #app-list, #edit-list { width: 34; border: solid $primary; }
+#edit-list Horizontal { height: auto; }
+#edit-list .edit-label { width: 1fr; }
+#edit-list .edit-round { width: auto; color: $text-muted; }
 #app-detail, #edit-detail { width: 1fr; border: solid $secondary; padding: 0 1; }
 #feedback { height: 5; border: solid $accent; }
 #render-info { padding: 1 2; }

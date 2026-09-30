@@ -171,7 +171,7 @@ class ReviewScreen(Screen):
         try:
             edits = E.load_edits(self.p.proposed_edits)
             decisions = E.load_feedback(self.p.review_feedback)
-            labels = [E.label(e) + (f" r{self.round_of(e)}" if e.revises else "") for e in edits]
+            labels = [E.label(e) for e in edits]
         except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError) as err:
             # The agent may be mid-write; keep the last good state and try once more.
             if retry:
@@ -186,7 +186,10 @@ class ReviewScreen(Screen):
         index = lv.index or 0
         await lv.clear()
         await lv.extend([
-            ListItem(Label(f"{E.GLYPH[E.state_of(e.id, self.decisions, e.proposed)]} {'✎ ' if self.shown_text(e)[1] == 'YOUR EDIT' else ''}{escape(text)}"), name=e.id)
+            ListItem(Horizontal(
+                Label(f"{E.GLYPH[E.state_of(e.id, self.decisions, e.proposed)]} {'✎ ' if self.shown_text(e)[1] == 'YOUR EDIT' else ''}{escape(text)}", classes="edit-label"),
+                Label(f"r{self.round_of(e)}" if e.revises else "", classes="edit-round"),
+            ), name=e.id)
             for e, text in zip(self.edits, labels)
         ])
         if self.edits:

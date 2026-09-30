@@ -1969,8 +1969,11 @@ async def test_revised_edit_shows_previous_and_comment(jobs_dir, reviewable):
         await pilot.pause()
         await pilot.press("enter")
         await pilot.pause()
-        rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
-        assert rows[0].startswith("○ acme.b1 r1")
+        items = app.screen.query_one("#edit-list", ListView).children
+        assert str(items[0].query_one(".edit-label", Label).content) == "○ acme.b1"
+        rounds = [items[i].query_one(".edit-round", Label) for i in (0, 1)]
+        assert str(rounds[0].content) == "r1" and str(rounds[1].content) == ""
+        assert rounds[0].region.right == items[0].region.right
         plain = app.screen.query_one("#edit-detail", Static).render().plain
         assert "PREVIOUS (r0)" in plain and "Built and deployed a churn model" in plain
         assert "YOUR COMMENT" in plain and "Keep the 8% figure" in plain
