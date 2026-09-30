@@ -26,7 +26,7 @@ Role: {role}
 3. Do not add any skill, tool, metric, date, title, employer, credential or outcome that is not already in resume.yaml. When a bullet would be stronger with a number that resume.yaml does not contain, rewrite it without the number and name the missing number in that edit's reason field.
 4. Write every rewritten bullet as one sentence: strong verb, what was done, scale or context, result.
 5. Reorder bullets within an entry so the ones matching this posting come first. Do not reorder entries. Do not change dates, titles or employer names.
-6. Do not remove bullets in this pass. Trimming for length is requested separately after the resume is rendered.
+6. Do not remove bullets.
 7. Before writing proposed-edits.json, send one chat message listing the posting requirements that no bullet in resume.yaml can honestly support, and wait for a reply. Then write proposed-edits.json.
 
 ## User focus

@@ -3,17 +3,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jobs_tui import application
 from jobs_tui.paths import AppPaths, template_typ
-
-LADDER: list[dict[str, str]] = [
-    {},
-    {"leading": "0.6em", "section_gap": "12pt", "entry_gap": "10pt"},
-    {"leading": "0.55em", "section_gap": "10pt", "entry_gap": "8pt", "margin_y": "1cm"},
-    {"leading": "0.5em", "section_gap": "9pt", "entry_gap": "7pt", "margin_y": "1cm"},
-    {"leading": "0.45em", "section_gap": "8pt", "entry_gap": "6pt", "margin_y": "0.9cm"},
-    {"leading": "0.4em", "section_gap": "7pt", "entry_gap": "5pt", "margin_y": "0.9cm"},
-]
 
 
 class RenderError(Exception):
@@ -25,7 +15,6 @@ class RenderResult:
     pdf: Path
     pages: int
     previews: list[Path] = field(default_factory=list)
-    knobs: dict[str, str] = field(default_factory=dict)
 
 
 def _run_tool(cmd: list[str]) -> subprocess.CompletedProcess:
@@ -46,12 +35,9 @@ def page_count(pdf: Path) -> int:
     return int(m.group(1))
 
 
-def compile(jobs: Path, p: AppPaths, knobs: dict[str, str]) -> Path:
+def compile(jobs: Path, p: AppPaths) -> Path:
     resume_rel = "/" + str(p.resume_yaml.relative_to(jobs))
-    cmd = ["typst", "compile", "--root", str(jobs), "--input", f"resume={resume_rel}"]
-    for k, v in knobs.items():
-        cmd += ["--input", f"{k}={v}"]
-    cmd += [str(template_typ(jobs)), str(p.resume_pdf)]
+    cmd = ["typst", "compile", "--root", str(jobs), "--input", f"resume={resume_rel}", str(template_typ(jobs)), str(p.resume_pdf)]
     _run_tool(cmd)
     return p.resume_pdf
 
@@ -64,23 +50,7 @@ def previews(pdf: Path, out_dir: Path) -> list[Path]:
     return sorted(out_dir.glob("page-*.png"), key=lambda f: int(f.stem.split("-")[1]))
 
 
-def _run(jobs: Path, p: AppPaths, knobs: dict[str, str]) -> RenderResult:
-    pdf = compile(jobs, p, knobs)
-    pages = page_count(pdf)
-    return RenderResult(pdf=pdf, pages=pages, previews=previews(pdf, p.preview_dir), knobs=dict(knobs))
-
-
 def render(jobs: Path, p: AppPaths) -> RenderResult:
-    return _run(jobs, p, application.load(p).fit)
-
-
-def autofit(jobs: Path, p: AppPaths) -> RenderResult:
-    result = None
-    for knobs in LADDER:
-        result = _run(jobs, p, knobs)
-        if result.pages <= 2:
-            break
-    app = application.load(p)
-    app.fit = dict(result.knobs)
-    application.save(p, app)
-    return result
+    pdf = compile(jobs, p)
+    pages = page_count(pdf)
+    return RenderResult(pdf=pdf, pages=pages, previews=previews(pdf, p.preview_dir))

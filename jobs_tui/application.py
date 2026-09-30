@@ -1,6 +1,6 @@
 import json
 import shutil
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
@@ -14,11 +14,11 @@ class Application:
     url: str | None
     created: str
     submitted_date: str | None = None
-    fit: dict[str, str] = field(default_factory=dict)
 
 
 def load(p: AppPaths) -> Application:
-    return Application(**json.loads(p.meta.read_text()))
+    raw = json.loads(p.meta.read_text())
+    return Application(**{k: v for k, v in raw.items() if k in Application.__dataclass_fields__})
 
 
 def save(p: AppPaths, app: Application) -> None:

@@ -13,7 +13,7 @@ def test_create_writes_meta_and_copies_master(jobs_dir):
     meta = json.loads(p.meta.read_text())
     assert meta == {
         "company": "Northwind", "role": "AI Analyst", "url": "https://x/1",
-        "created": date.today().isoformat(), "submitted_date": None, "fit": {},
+        "created": date.today().isoformat(), "submitted_date": None,
     }
     assert p.resume_yaml.read_text() == "name: Test\nsections: []\n"
 
@@ -30,11 +30,16 @@ def test_load_save_roundtrip(jobs_dir):
     p = application.create(jobs_dir, "A", "B", None)
     app = application.load(p)
     app.submitted_date = "2026-09-30"
-    app.fit = {"leading": "0.45em"}
     application.save(p, app)
     again = application.load(p)
     assert again.submitted_date == "2026-09-30"
-    assert again.fit == {"leading": "0.45em"}
+
+
+def test_load_ignores_removed_fields(jobs_dir):
+    paths.master_yaml(jobs_dir).write_text("name: T\n")
+    p = application.create(jobs_dir, "A", "B", None)
+    p.meta.write_text(json.dumps({**json.loads(p.meta.read_text()), "fit": {}}))
+    assert application.load(p).company == "A"
 
 
 def test_summary_from_files(jobs_dir):

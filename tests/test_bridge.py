@@ -129,8 +129,6 @@ def test_prompts_mention_folder_and_files():
     assert str(root) in s and "review-request.md" in s and "proposed-edits.json" in s and "Do not edit resume.yaml" in s
     f = bridge.feedback_prompt(root, 1)
     assert "review-feedback.json" in f and '"revise"' in f
-    t = bridge.trim_prompt(root, 3)
-    assert "3 pages" in t and "resume.yaml" in t
     assert bridge.free_text_prompt(root, "shorten b2") == f"Regarding {root}: shorten b2"
     assert bridge.free_text_prompt(None, "hi") == "hi"
 
@@ -144,5 +142,3 @@ def test_feedback_prompt_is_deterministic_per_action():
     assert '"rejected"' not in f
     assert "Leave every edit not listed" in f
     assert "Do not ask me questions" in f and "Do not edit resume.yaml" in f
-    t = bridge.trim_prompt(root, 3)
-    assert "ids not already used in proposed-edits.json or review-feedback.json" in t

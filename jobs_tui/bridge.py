@@ -97,14 +97,6 @@ def feedback_prompt(root: Path, round: int) -> str:
     )
 
 
-def trim_prompt(root: Path, pages: int) -> str:
-    return (
-        f"The resume in {root} renders to {pages} pages and must fit 2. Propose trims or merges of bullets in "
-        "resume.yaml as edits in proposed-edits.json, using ids not already used in proposed-edits.json or review-feedback.json. "
-        "Do not edit resume.yaml."
-    )
-
-
 def free_text_prompt(root: Path | None, text: str) -> str:
     return f"Regarding {root}: {text}" if root else text
 
