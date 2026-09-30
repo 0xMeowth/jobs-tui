@@ -59,7 +59,7 @@ def test_remove_keeps_other_ids(resume):
 def test_units_lists_entries_and_bullets(resume):
     ids = [u[0] for u in resume.units()]
     assert ids[:4] == ["acme", "acme.b1", "acme.b2", "globex"]
-    assert "skills.b1" in ids and "nus.b1" in ids
+    assert "skills.b1" in ids and "esu.b1" in ids
 
 
 def test_apply_replace_with_final_override(resume):

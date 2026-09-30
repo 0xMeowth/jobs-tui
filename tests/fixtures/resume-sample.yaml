@@ -33,10 +33,10 @@ sections:
   - id: education
     title: Education
     entries:
-      - id: nus
+      - id: esu
         org: Example State University
         title: Bachelor of Business Administration, Honours
         dates: Aug 2016 – Jul 2020
         bullets:
-          - id: nus.b1
+          - id: esu.b1
             text: Modules included Business Analytics and Optimisation
