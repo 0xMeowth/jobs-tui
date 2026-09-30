@@ -97,10 +97,6 @@ def feedback_prompt(root: Path, round: int) -> str:
     )
 
 
-def free_text_prompt(root: Path | None, text: str) -> str:
-    return f"Regarding {root}: {text}" if root else text
-
-
 class Bridge:
     def __init__(self, pane_id: str | None = None):
         self.pane_id = pane_id

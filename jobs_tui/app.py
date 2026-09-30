@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
@@ -8,10 +7,10 @@ from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.events import Key
 from textual.widget import Widget
-from textual.widgets import Input, Select, Static
+from textual.widgets import Select, Static
 
 from jobs_tui import bridge
-from jobs_tui.bridge import Bridge, Pane, free_text_prompt, pane_label
+from jobs_tui.bridge import Bridge, Pane, pane_label
 from jobs_tui.paths import AppPaths
 
 
@@ -26,7 +25,6 @@ class CommandBar(Widget):
         value = app.bridge.pane_id if app.bridge.pane_id in [v for _, v in options] else Select.NULL
         yield Select(options, value=value, allow_blank=True, prompt="No agent: prompts copy to clipboard", id="agent-pane")
         yield Static("", id="agent-state")
-        yield Input(placeholder=": message to agent", id="agent-input")
 
     def on_mount(self) -> None:
         self.refresh_panes()
@@ -103,29 +101,14 @@ class CommandBar(Widget):
         self.query_one("#agent-state", Static).update(" · ".join(x for x in parts if x))
 
     def on_key(self, event: Key) -> None:
-        if event.key == "escape" and (self.query_one("#agent-input", Input).has_focus or self.query_one("#agent-pane", Select).has_focus):
+        if event.key == "escape" and self.query_one("#agent-pane", Select).has_focus:
             event.stop()
             self.app.leave_bar()  # type: ignore[attr-defined]
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        app: JobsApp = self.app  # type: ignore[assignment]
-        text = event.value.strip()
-        event.input.value = ""
-        if text:
-            app.send_to_agent(free_text_prompt(app.current.root if app.current else None, text), on_busy=partial(self.restore_input, text))
-        app.leave_bar()
-
-    def restore_input(self, text: str) -> None:
-        if not self.is_mounted:
-            return
-        box = self.query_one("#agent-input", Input)
-        box.value = text
-        box.focus()
 
 
 class JobsApp(App):
     CSS_PATH = "app.tcss"
-    BINDINGS = [Binding("colon", "focus_bar", "Agent", key_display=":"), Binding("p", "focus_pair", "Pair")]
+    BINDINGS = [Binding("p", "focus_pair", "Pair")]
 
     def __init__(self, jobs: Path):
         super().__init__()
@@ -158,9 +141,6 @@ class JobsApp(App):
         else:
             self.screen.set_focus(None)
 
-    def action_focus_bar(self) -> None:
-        self._enter_bar("#agent-input")
-
     def action_focus_pair(self) -> None:
         self._enter_bar("#agent-pane")
 
@@ -169,18 +149,16 @@ class JobsApp(App):
         while len(self.screen_stack) > 1 and not isinstance(self.screen, ApplicationsScreen):
             self.pop_screen()
 
-    def send_to_agent(self, text: str, force: bool = False, on_busy: Callable[[], None] | None = None) -> None:
+    def send_to_agent(self, text: str, force: bool = False) -> None:
         force = force or (text == self._busy_text)
-        self.run_worker(partial(self._deliver, text, force, on_busy), thread=True, group="deliver")
+        self.run_worker(partial(self._deliver, text, force), thread=True, group="deliver")
 
-    def _deliver(self, text: str, force: bool, on_busy: Callable[[], None] | None) -> None:
+    def _deliver(self, text: str, force: bool) -> None:
         outcome = self.bridge.deliver(text, force=force)
-        self.call_from_thread(self._notify_outcome, outcome, text, on_busy)
+        self.call_from_thread(self._notify_outcome, outcome, text)
 
-    def _notify_outcome(self, outcome: str, text: str, on_busy: Callable[[], None] | None = None) -> None:
+    def _notify_outcome(self, outcome: str, text: str) -> None:
         self._busy_text = text if outcome == "busy" else None
-        if outcome == "busy" and on_busy is not None:
-            on_busy()
         messages = {
             "sent": "Sent to agent pane",
             "busy": "Agent pane is working. Press again to force, or wait.",

@@ -31,7 +31,7 @@ class ApplicationsScreen(Screen):
     ]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter review · b brief · r render · f finalize · y yaml · x delete · t tracker · p pair · : agent · q quit", classes="help")
+        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter review · b brief · r render · f finalize · y yaml · x delete · t tracker · p pair · q quit", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="app-list")
             yield Static("No applications yet. Press n.", id="app-detail")

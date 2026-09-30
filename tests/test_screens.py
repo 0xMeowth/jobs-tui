@@ -39,31 +39,6 @@ async def test_applications_screen_skips_corrupt_folder(jobs_dir, two_apps):
         assert len(lv.children) == 1
 
 
-async def test_colon_focuses_command_bar(jobs_dir):
-    app = JobsApp(jobs_dir)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-        await pilot.press("colon")
-        await pilot.pause()
-        from textual.widgets import Input
-        assert app.screen.query_one("#agent-input", Input).has_focus
-
-
-async def test_command_bar_submit_copies_when_no_pane(jobs_dir, monkeypatch):
-    from jobs_tui import bridge as bridge_mod
-    copied = []
-    monkeypatch.setattr(bridge_mod, "copy_to_clipboard", lambda t: copied.append(t))
-    monkeypatch.setenv("HERDR_ENV", "0")
-    app = JobsApp(jobs_dir)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-        await pilot.press("colon")
-        await pilot.press(*"hello")
-        await pilot.press("enter")
-        await pilot.pause()
-    assert copied == ["hello"]
-
-
 async def test_new_application_creates_and_imports_pasted_jd(jobs_dir, two_apps):
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -136,34 +111,6 @@ async def test_new_application_rejects_empty_slug(jobs_dir):
         assert app.screen.__class__.__name__ == "NewApplicationScreen"
         assert str(app.screen.query_one("#new-status", Static).content)
     assert paths.list_applications(jobs_dir) == []
-
-
-async def test_colon_on_modal_does_not_crash(jobs_dir):
-    app = JobsApp(jobs_dir)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-        await pilot.press("n")
-        await pilot.pause()
-        app.screen.set_focus(None)
-        await pilot.pause()
-        await pilot.press("colon")
-        await pilot.pause()
-        app.action_focus_bar()
-        await pilot.pause()
-        assert app.is_running
-        assert app.screen.__class__.__name__ == "NewApplicationScreen"
-
-
-async def test_escape_leaves_command_bar(jobs_dir):
-    app = JobsApp(jobs_dir)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-        await pilot.press("colon")
-        await pilot.pause()
-        await pilot.press("escape")
-        await pilot.pause()
-        from textual.widgets import Input
-        assert not app.screen.query_one("#agent-input", Input).has_focus
 
 
 async def test_cancel_during_url_fetch_returns_to_list(jobs_dir, monkeypatch):
@@ -1070,9 +1017,7 @@ async def test_new_application_reuses_existing_company(jobs_dir, two_apps):
         assert not (jobs_dir / "companies" / "fab-rikam").exists()
 
 
-async def test_list_keeps_focus_after_command_bar(jobs_dir, two_apps, monkeypatch):
-    from jobs_tui import bridge as bridge_mod
-    monkeypatch.setattr(bridge_mod, "copy_to_clipboard", lambda t: None)
+async def test_list_keeps_focus_after_command_bar(jobs_dir, two_apps):
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(160, 40)) as pilot:
         await pilot.pause()
@@ -1081,9 +1026,6 @@ async def test_list_keeps_focus_after_command_bar(jobs_dir, two_apps, monkeypatc
         assert lv.index == 0
         await pilot.press("p")
         await pilot.press("escape")
-        await pilot.pause()
-        assert lv.has_focus
-        await pilot.press("colon", *"hi", "enter")
         await pilot.pause()
         assert lv.has_focus
         await pilot.press("down")
@@ -1228,26 +1170,6 @@ async def test_list_glyphs_follow_derived_state(jobs_dir, reviewable, monkeypatc
         await pilot.pause()
         rows = [str(item.query_one(Label).content) for item in app.screen.query_one("#edit-list", ListView).children]
         assert rows[1].startswith("◐")
-
-
-async def test_busy_agent_keeps_typed_message(jobs_dir, two_apps, monkeypatch):
-    from jobs_tui import bridge as bridge_mod
-    pane = bridge_mod.Pane("wK:p1", "codex", "working", "/j", "t", "jobs")
-    monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
-    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
-    monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane)
-    app = JobsApp(jobs_dir)
-    app.bridge.pane_id = "wK:p1"
-    async with app.run_test(size=(160, 40)) as pilot:
-        await pilot.pause()
-        from textual.widgets import Input
-        await pilot.press("colon", *"hello", "enter")
-        await pilot.pause()
-        await app.workers.wait_for_complete()
-        await pilot.pause()
-        box = app.screen.query_one("#agent-input", Input)
-        assert box.value == "hello"
-        assert box.has_focus
 
 
 async def test_brief_prefills_from_saved_request(jobs_dir, two_apps):

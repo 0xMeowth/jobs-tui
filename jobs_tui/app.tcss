@@ -6,8 +6,7 @@ Screen { layout: vertical; }
 #render-info { padding: 1 2; }
 CommandBar { dock: bottom; height: 3; layout: horizontal; background: $panel; }
 CommandBar #agent-pane { width: 44; }
-CommandBar #agent-state { width: 24; padding: 1 1; color: $text-muted; }
-CommandBar #agent-input { width: 1fr; }
+CommandBar #agent-state { width: 1fr; padding: 1 1; color: $text-muted; }
 .help { color: $text-muted; padding: 0 1; }
 ModalScreen { align: center middle; }
 #dialog { width: 80; height: auto; max-height: 90%; border: thick $primary; background: $surface; padding: 1 2; }

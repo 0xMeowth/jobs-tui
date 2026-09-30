@@ -129,8 +129,6 @@ def test_prompts_mention_folder_and_files():
     assert str(root) in s and "review-request.md" in s and "proposed-edits.json" in s and "Do not edit resume.yaml" in s
     f = bridge.feedback_prompt(root, 1)
     assert "review-feedback.json" in f and '"revise"' in f
-    assert bridge.free_text_prompt(root, "shorten b2") == f"Regarding {root}: shorten b2"
-    assert bridge.free_text_prompt(None, "hi") == "hi"
 
 
 def test_feedback_prompt_is_deterministic_per_action():
