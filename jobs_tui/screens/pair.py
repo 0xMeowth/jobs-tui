@@ -1,33 +1,65 @@
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Label, Select
+from textual.widgets import Button, Label, Select, Static
+
+from jobs_tui import bridge
+
+NO_PANES = "No agent panes found. Start codex or claude in a herdr pane, then press p."
 
 
 class PairScreen(ModalScreen[bool]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
     def compose(self) -> ComposeResult:
-        options = self.app.pane_options
         with Vertical(id="dialog"):
-            yield Label("[b]Pair an agent pane[/b]  The review prompt goes to this pane.")
-            if options:
-                yield Select(options, allow_blank=True, prompt="No agent pane: prompts copy to clipboard", id="pair-select")
-            else:
-                yield Label("No agent panes found. Start codex or claude in a herdr pane, then press p on the list.")
+            yield Label("[b]Pair an agent pane[/b]  Review prompts go to this pane.")
+            yield Static("Looking for agent panes…", id="pair-status")
+            yield Select(self.app.pane_options, allow_blank=True, prompt="Pick an agent pane", id="pair-select")
             with Horizontal():
                 yield Button("Continue", variant="primary", id="continue")
                 yield Button("Cancel", id="cancel")
+
+    def on_mount(self) -> None:
+        if self.app.pane_options:
+            self.show_options(self.app.pane_options)
+        else:
+            self.query_one("#pair-select", Select).display = False
+        self.run_worker(self._fetch, thread=True, exclusive=True)
+
+    def _fetch(self) -> None:
+        panes = bridge.list_agent_panes() if bridge.in_herdr() else []
+        self.app.call_from_thread(self.show_options, [(escape(bridge.pane_label(p)), p.pane_id) for p in panes])
+
+    def show_options(self, options: list[tuple[str, str]]) -> None:
+        if not self.is_mounted:
+            return
+        select = self.query_one("#pair-select", Select)
+        status = self.query_one("#pair-status", Static)
+        if not options:
+            if not select.display:
+                status.update(NO_PANES)
+            return
+        self.app.pane_options = options
+        status.display = False
+        if select.display and select._options[1:] == options:
+            if not select.has_focus_within:
+                select.focus()
+                select.action_show_overlay()
+            return
+        select.set_options(options)
+        select.display = True
+        select.focus()
+        select.action_show_overlay()
 
     def action_cancel(self) -> None:
         self.dismiss(False)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "continue":
+        value = self.query_one("#pair-select", Select).value
+        if event.button.id != "continue" or value is Select.NULL:
             self.dismiss(False)
             return
-        selects = self.query("#pair-select")
-        if selects:
-            value = selects.first(Select).value
-            self.app.bridge.pane_id = None if value is Select.NULL else str(value)
+        self.app.bridge.pane_id = str(value)
         self.dismiss(True)

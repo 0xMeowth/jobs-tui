@@ -101,13 +101,16 @@ class CommandBar(Widget):
         self.query_one("#agent-state", Static).update(" · ".join(x for x in parts if x))
 
     def on_key(self, event: Key) -> None:
-        if event.key == "escape" and self.query_one("#agent-pane", Select).has_focus:
+        select = self.query_one("#agent-pane", Select)
+        if event.key == "escape" and select.has_focus_within:
             event.stop()
+            select.expanded = False
             self.app.leave_bar()  # type: ignore[attr-defined]
 
 
 class JobsApp(App):
     CSS_PATH = "app.tcss"
+    pair_on_launch = True
     BINDINGS = [Binding("p", "focus_pair", "Pair")]
 
     def __init__(self, jobs: Path):
@@ -123,16 +126,20 @@ class JobsApp(App):
     def on_mount(self) -> None:
         from jobs_tui.screens.applications import ApplicationsScreen
         self.push_screen(ApplicationsScreen())
+        if self.pair_on_launch and bridge.in_herdr() and not self.bridge.pane_id:
+            from jobs_tui.screens.pair import PairScreen
+            self.push_screen(PairScreen())
 
-    def _enter_bar(self, selector: str) -> None:
+    def _enter_bar(self, selector: str) -> Widget | None:
         try:
             target = self.screen.query(selector).first()
         except NoMatches:
-            return
+            return None
         focused = self.screen.focused
         if focused is not None and not any(isinstance(w, CommandBar) for w in focused.ancestors_with_self):
             self._before_bar = focused
         target.focus()
+        return target
 
     def leave_bar(self) -> None:
         before, self._before_bar = self._before_bar, None
@@ -142,7 +149,8 @@ class JobsApp(App):
             self.screen.set_focus(None)
 
     def action_focus_pair(self) -> None:
-        self._enter_bar("#agent-pane")
+        if isinstance(select := self._enter_bar("#agent-pane"), Select):
+            select.action_show_overlay()
 
     def pop_to_list(self) -> None:
         from jobs_tui.screens.applications import ApplicationsScreen

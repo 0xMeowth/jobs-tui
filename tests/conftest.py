@@ -17,4 +17,6 @@ def jobs_dir(tmp_path, monkeypatch) -> Path:
     shutil.copy(SAMPLE, jobs / "templates" / "resume-master.yaml")
     monkeypatch.setenv("JOBS_DIR", str(jobs))
     monkeypatch.setenv("HERDR_ENV", "0")
+    from jobs_tui.app import JobsApp
+    monkeypatch.setattr(JobsApp, "pair_on_launch", False, raising=False)
     return jobs

@@ -222,10 +222,10 @@ async def test_p_focuses_pair_select(jobs_dir):
         await pilot.pause()
         from textual.widgets import Select
         select = app.screen.query_one("#agent-pane", Select)
-        assert select.has_focus
+        assert select.has_focus_within and select.expanded
         await pilot.press("escape")
         await pilot.pause()
-        assert not select.has_focus
+        assert not select.has_focus_within and not select.expanded
         assert app.is_running
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
 
@@ -885,6 +885,44 @@ async def test_no_pane_notify_explains_pairing(jobs_dir, monkeypatch):
     assert "No agent pane. Prompt copied to clipboard. Press p to pair a pane." in notes
 
 
+async def test_p_opens_pair_dropdown(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        from textual.widgets import Select
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        await pilot.press("p")
+        await pilot.pause()
+        assert select.has_focus_within and select.expanded
+
+
+async def test_launch_opens_pair_dialog_in_herdr(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    monkeypatch.setattr(JobsApp, "pair_on_launch", True)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        from textual.widgets import Select
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if app.screen.__class__.__name__ == "PairScreen" and app.screen.query_one("#pair-select", Select).expanded:
+                break
+        assert app.screen.__class__.__name__ == "PairScreen"
+        select = app.screen.query_one("#pair-select", Select)
+        assert select.expanded and len(select._options) - 1 == 2
+        await pilot.press("escape", "escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
+async def test_launch_skips_pair_dialog_outside_herdr(jobs_dir, two_apps, monkeypatch):
+    monkeypatch.setattr(JobsApp, "pair_on_launch", True)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause(0.2)
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
 async def test_applications_detail_shows_markup_literally(jobs_dir):
     application.create(jobs_dir, "Acme [b]", "Role [/] & Co", "https://x/[/]")
     app = JobsApp(jobs_dir)
@@ -978,7 +1016,7 @@ async def test_render_screen_keys_match_list(jobs_dir, reviewable, monkeypatch):
         from textual.widgets import Select
         await pilot.press("p")
         await pilot.pause()
-        assert app.screen.query_one("#agent-pane", Select).has_focus
+        assert app.screen.query_one("#agent-pane", Select).has_focus_within
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("f")
@@ -1015,7 +1053,7 @@ async def test_review_r_renders_and_p_pairs(jobs_dir, reviewable, monkeypatch):
         from textual.widgets import Select
         await pilot.press("p")
         await pilot.pause()
-        assert app.screen.query_one("#agent-pane", Select).has_focus
+        assert app.screen.query_one("#agent-pane", Select).has_focus_within
         await pilot.press("escape")
         await pilot.pause()
         await pilot.press("r")
@@ -1032,9 +1070,8 @@ async def test_enter_in_pair_dropdown_pairs_without_opening_review(jobs_dir, two
         select = app.screen.query_one("#agent-pane", Select)
         await wait_for_options(pilot, select, 2)
         await pilot.press("p")
-        await pilot.press("enter")
         await pilot.pause()
-        assert select.expanded, "Enter on the closed dropdown should open it"
+        assert select.expanded, "p should open the dropdown"
         await pilot.press("down", "enter")
         await pilot.pause()
         assert app.bridge.pane_id == "wK:p1"
@@ -1138,7 +1175,7 @@ async def test_picking_pane_returns_focus_to_list(jobs_dir, two_apps, monkeypatc
         from textual.widgets import ListView, Select
         select = app.screen.query_one("#agent-pane", Select)
         await wait_for_options(pilot, select, 2)
-        await pilot.press("p", "enter", "down", "enter")
+        await pilot.press("p", "down", "enter")
         await pilot.pause()
         assert app.bridge.pane_id == "wK:p1"
         assert app.screen.query_one("#app-list", ListView).has_focus
