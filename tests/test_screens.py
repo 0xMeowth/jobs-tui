@@ -401,6 +401,13 @@ def reviewable(jobs_dir):
     return p
 
 
+@pytest.fixture
+def decided(reviewable):
+    from jobs_tui.edits import Decision, save_feedback
+    save_feedback(reviewable.review_feedback, {"e1": Decision("accepted", final="Built and deployed a churn model"), "e2": Decision("rejected")})
+    return reviewable
+
+
 async def test_review_accept_writes_yaml_and_feedback(jobs_dir, reviewable, monkeypatch):
     from jobs_tui import render
     monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
@@ -563,7 +570,7 @@ async def test_render_screen_shows_pages(jobs_dir, reviewable, monkeypatch):
         assert app.pages == 3
 
 
-async def test_finalize_records_submission(jobs_dir, reviewable):
+async def test_finalize_records_submission(jobs_dir, reviewable, decided):
     from datetime import date
     from jobs_tui import tracker
     app = JobsApp(jobs_dir)
@@ -594,7 +601,7 @@ async def test_finalize_refuses_submitted_application(jobs_dir, reviewable):
         assert "already finalized" in app.screen.query_one("#finalize-info", Static).render().plain
 
 
-async def test_finalize_rolls_back_on_tracker_error(jobs_dir, reviewable, monkeypatch):
+async def test_finalize_rolls_back_on_tracker_error(jobs_dir, reviewable, decided, monkeypatch):
     from jobs_tui import tracker
 
     def fail(path, row):
@@ -615,7 +622,7 @@ async def test_finalize_rolls_back_on_tracker_error(jobs_dir, reviewable, monkey
     assert tracker.read(paths.tracker_md(jobs_dir)) == []
 
 
-async def test_finalize_double_click_records_once(jobs_dir, reviewable):
+async def test_finalize_double_click_records_once(jobs_dir, reviewable, decided):
     from jobs_tui import tracker
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -641,7 +648,7 @@ async def open_save(pilot, monkeypatch, pages=2):
     await pilot.pause()
 
 
-async def test_save_copies_pdf_under_chosen_name(jobs_dir, reviewable, monkeypatch):
+async def test_save_copies_pdf_under_chosen_name(jobs_dir, reviewable, decided, monkeypatch):
     from textual.widgets import Input
     reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
     app = JobsApp(jobs_dir)
@@ -658,7 +665,7 @@ async def test_save_copies_pdf_under_chosen_name(jobs_dir, reviewable, monkeypat
     assert application.load(reviewable).submitted_date is None
 
 
-async def test_save_asks_before_overwrite(jobs_dir, reviewable, monkeypatch):
+async def test_save_asks_before_overwrite(jobs_dir, reviewable, decided, monkeypatch):
     from textual.widgets import Button, Static
     reviewable.resume_pdf.write_bytes(b"%PDF-1.4 new")
     (reviewable.root / "acme-analyst.pdf").write_bytes(b"old")
@@ -678,7 +685,7 @@ async def test_save_asks_before_overwrite(jobs_dir, reviewable, monkeypatch):
     assert (reviewable.root / "acme-analyst.pdf").read_bytes() == b"%PDF-1.4 new"
 
 
-async def test_save_rejects_paths_and_render_output(jobs_dir, reviewable, monkeypatch):
+async def test_save_rejects_paths_and_render_output(jobs_dir, reviewable, decided, monkeypatch):
     from textual.widgets import Input, Static
     reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
     app = JobsApp(jobs_dir)
@@ -692,6 +699,96 @@ async def test_save_rejects_paths_and_render_output(jobs_dir, reviewable, monkey
             assert app.screen.query_one("#save-info", Static).render().plain
     assert sorted(f.name for f in reviewable.root.glob("*.pdf")) == ["resume.pdf"]
     assert not (jobs_dir / "companies" / "acme" / "x.pdf").exists()
+
+
+async def test_save_blocked_until_review_finished(jobs_dir, reviewable, monkeypatch):
+    from textual.widgets import Button, Static, TextArea
+    reviewable.resume_pdf.write_bytes(b"%PDF")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        app.screen.query_one("#comment", TextArea).text = "tighten"
+        await pilot.click("#ok")
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+        await open_save(pilot, monkeypatch)
+        assert app.screen.query_one("#save", Button).disabled
+        info = app.screen.query_one("#save-info", Static).render().plain
+        assert "1 open" in info and "1 with unsent comments" in info
+
+
+async def test_save_blocked_while_brief_has_no_edits(jobs_dir, monkeypatch):
+    from textual.widgets import Button, Static
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.review_request.write_text("brief")
+    p.resume_pdf.write_bytes(b"%PDF")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch)
+        assert app.screen.query_one("#save", Button).disabled
+        assert "proposed-edits.json" in app.screen.query_one("#save-info", Static).render().plain
+
+
+async def test_save_allowed_without_brief(jobs_dir, monkeypatch):
+    from textual.widgets import Button
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.resume_pdf.write_bytes(b"%PDF")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch)
+        assert not app.screen.query_one("#save", Button).disabled
+
+
+async def test_save_blocked_on_unreadable_edits(jobs_dir, reviewable, decided, monkeypatch):
+    from textual.widgets import Button, Static
+    reviewable.resume_pdf.write_bytes(b"%PDF")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        reviewable.proposed_edits.write_text("{")
+        await open_save(pilot, monkeypatch)
+        assert app.screen.query_one("#save", Button).disabled
+        assert "Cannot read" in app.screen.query_one("#save-info", Static).render().plain
+
+
+async def test_save_blocked_when_pdf_older_than_yaml(jobs_dir, reviewable, decided, monkeypatch):
+    import os
+    from textual.widgets import Button, Static
+    reviewable.resume_pdf.write_bytes(b"%PDF")
+    old = reviewable.resume_yaml.stat().st_mtime - 60
+    os.utime(reviewable.resume_pdf, (old, old))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch)
+        assert app.screen.query_one("#save", Button).disabled
+        assert "render" in app.screen.query_one("#save-info", Static).render().plain
+
+
+async def test_finalize_blocked_until_review_finished(jobs_dir, reviewable):
+    from textual.widgets import Button, Static
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        assert app.screen.query_one("#yes", Button).disabled
+        assert "2 open" in app.screen.query_one("#finalize-info", Static).render().plain
+
+
+async def test_finalize_blocked_while_brief_has_no_edits(jobs_dir):
+    from textual.widgets import Button
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.review_request.write_text("brief")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("f")
+        await pilot.pause()
+        assert app.screen.query_one("#yes", Button).disabled
 
 
 async def test_save_refuses_three_pages(jobs_dir, reviewable, monkeypatch):
@@ -1203,7 +1300,7 @@ async def test_brief_start_opens_review(jobs_dir, two_apps, monkeypatch):
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
 
 
-async def test_finalize_from_render_returns_to_list(jobs_dir, reviewable, monkeypatch):
+async def test_finalize_from_render_returns_to_list(jobs_dir, reviewable, decided, monkeypatch):
     from jobs_tui import render
     reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
     monkeypatch.setattr(render, "page_count", lambda pdf: 2)

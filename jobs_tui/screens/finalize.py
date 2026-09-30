@@ -1,3 +1,4 @@
+import json
 import shutil
 from contextlib import suppress
 from datetime import date
@@ -8,14 +9,31 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
-from jobs_tui import application, render, tracker
+from jobs_tui import application, edits as E, render, tracker
 from jobs_tui.app import pages_text
 from jobs_tui.paths import AppPaths, tracker_md
 
 
+def review_blocker(p: AppPaths) -> str | None:
+    if not p.proposed_edits.exists():
+        return "The agent has not written proposed-edits.json yet. Review its edits first." if p.review_request.exists() else None
+    try:
+        c = E.counts(E.load_edits(p.proposed_edits), E.load_feedback(p.review_feedback))
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError) as err:
+        return escape(f"Cannot read the review files: {err}")
+    if not c["pending"]:
+        return None
+    parts = [f"{c[k]} {text}" for k, text in (("open", "open"), ("rework", "with unsent comments"), ("sent", "waiting for the agent")) if c[k]]
+    return "Review not finished: " + ", ".join(parts) + ". Accept or reject every edit first."
+
+
 def check_pdf(p: AppPaths) -> tuple[bool, str]:
+    if blocker := review_blocker(p):
+        return False, blocker
     if not p.resume_pdf.exists():
         return False, "No rendered PDF. Press r to render first."
+    if p.resume_pdf.stat().st_mtime < p.resume_yaml.stat().st_mtime:
+        return False, "resume.yaml changed since the last render. Press r to render again."
     try:
         pages = render.page_count(p.resume_pdf)
     except Exception as err:
@@ -116,6 +134,8 @@ class FinalizeScreen(ModalScreen[bool]):
     def check(self) -> tuple[bool, str]:
         if application.load(self.p).submitted_date:
             return False, "This application was already finalized."
+        if blocker := review_blocker(self.p):
+            return False, blocker
         return True, "Finalizing records today as the submission date and adds a row to tracker.md."
 
     def action_cancel(self) -> None:
