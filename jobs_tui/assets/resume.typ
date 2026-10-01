@@ -1,7 +1,7 @@
 // ---- knobs: change these numbers, nothing below them ----
 #let knob(name, default) = eval(sys.inputs.at(name, default: default))
 #let font-name   = sys.inputs.at("font", default: "Nunito")
-#let body-size   = knob("body_size", "9.5pt")
+#let body-size   = knob("body_size", "10pt")
 #let leading     = knob("leading", "0.7em")     // space between lines
 #let section-gap = knob("section_gap", "14pt")  // space above a section bar
 #let entry-gap   = knob("entry_gap", "16pt")  // space above each job
@@ -29,15 +29,16 @@
   #block(below: 0.35em, grid(
     columns: (1fr, auto), column-gutter: 8pt,
     text(weight: "bold", e.org),
-    text(weight: "bold", e.dates),
+    if "dates" in e { text(weight: "bold", e.dates) } else { none },
   ))
+  #if "url" in e [#link("https://" + e.url)[#e.url] \ ]
   #if "title" in e [#e.title \ ]
   #if "bullets" in e { bullets(e.bullets) }
 ]
 
-#text(size: 27pt, tracking: 4pt, upper(data.name))
+#text(size: 27pt, tracking: 1.5pt, data.name)
 #v(1pt)
-#data.contact.phone | #data.contact.email | #data.contact.linkedin
+#{ ("location", "phone", "email", "linkedin").filter(k => k in data.contact).map(k => data.contact.at(k)).join(" | ") }
 
 #for s in data.sections {
   section(s.title)

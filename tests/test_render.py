@@ -36,3 +36,19 @@ def test_missing_tool_raises_render_error(jobs_dir, app, monkeypatch):
     monkeypatch.setattr(subprocess, "run", missing)
     with pytest.raises(render.RenderError, match="typst"):
         render.render(jobs_dir, app)
+
+
+@needs_typst
+def test_starter_template_handles_projects_and_contact(jobs_dir, app):
+    import yaml
+    data = yaml.safe_load(app.resume_yaml.read_text())
+    data["contact"]["location"] = "Wellington"
+    data["sections"].append({"id": "projects", "title": "Projects", "entries": [
+        {"id": "bot", "org": "Recipe Bot", "url": "github.com/ada/recipe-bot", "bullets": [{"id": "bot.b1", "text": "Built a recipe bot"}]},
+    ]})
+    app.resume_yaml.write_text(yaml.safe_dump(data, allow_unicode=True))
+    r = render.render(jobs_dir, app)
+    text = subprocess.run(["pdftotext", str(r.pdf), "-"], capture_output=True, text=True, check=True).stdout
+    assert text.splitlines()[0] == "Ada Example"
+    assert "Wellington | (65) 0000 0000 | ada@example.com" in text
+    assert "github.com/ada/recipe-bot" in text
