@@ -1,8 +1,10 @@
 import json
+import re
 import shutil
 from contextlib import suppress
 from datetime import date
 
+import yaml
 from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -43,6 +45,15 @@ def check_pdf(p: AppPaths) -> tuple[bool, str]:
     return True, f"Resume has {pages_text(pages)}. Saves a copy of resume.pdf in this application's folder."
 
 
+def default_pdf_name(p: AppPaths) -> str:
+    try:
+        name = str(yaml.safe_load(p.resume_yaml.read_text()).get("name") or "")
+    except (OSError, yaml.YAMLError, AttributeError):
+        name = ""
+    words = re.findall(r"[^\W_]+", name)
+    return "-".join(words) + "-Resume.pdf" if words else f"{p.company_slug}-{p.role_slug}.pdf"
+
+
 class SaveScreen(ModalScreen[bool]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
@@ -56,7 +67,7 @@ class SaveScreen(ModalScreen[bool]):
         with Vertical(id="dialog"):
             yield Label("[b]Save PDF[/b]")
             yield Static(message, id="save-info")
-            yield Input(f"{self.p.company_slug}-{self.p.role_slug}.pdf", id="save-name", disabled=not ok)
+            yield Input(default_pdf_name(self.p), id="save-name", disabled=not ok)
             with Horizontal():
                 yield Button("Save", variant="primary", id="save", disabled=not ok)
                 yield Button("Cancel", id="cancel")

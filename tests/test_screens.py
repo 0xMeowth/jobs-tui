@@ -725,7 +725,7 @@ async def test_save_copies_pdf_under_chosen_name(jobs_dir, reviewable, decided, 
         await open_save(pilot, monkeypatch)
         assert app.screen.__class__.__name__ == "SaveScreen"
         name = app.screen.query_one("#save-name", Input)
-        assert name.value == "acme-analyst.pdf"
+        assert name.value == "Ada-Example-Resume.pdf"
         name.value = "my cv"
         await pilot.click("#save")
         await pilot.pause()
@@ -734,10 +734,20 @@ async def test_save_copies_pdf_under_chosen_name(jobs_dir, reviewable, decided, 
     assert application.load(reviewable).submitted_date is None
 
 
+async def test_save_name_falls_back_without_resume_name(jobs_dir, reviewable, decided, monkeypatch):
+    from textual.widgets import Input
+    reviewable.resume_yaml.write_text("sections: []\n")
+    reviewable.resume_pdf.write_bytes(b"%PDF")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await open_save(pilot, monkeypatch)
+        assert app.screen.query_one("#save-name", Input).value == "acme-analyst.pdf"
+
+
 async def test_save_asks_before_overwrite(jobs_dir, reviewable, decided, monkeypatch):
     from textual.widgets import Button, Static
     reviewable.resume_pdf.write_bytes(b"%PDF-1.4 new")
-    (reviewable.root / "acme-analyst.pdf").write_bytes(b"old")
+    (reviewable.root / "Ada-Example-Resume.pdf").write_bytes(b"old")
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await open_save(pilot, monkeypatch)
@@ -746,12 +756,12 @@ async def test_save_asks_before_overwrite(jobs_dir, reviewable, decided, monkeyp
         assert app.screen.__class__.__name__ == "SaveScreen"
         assert "exists" in app.screen.query_one("#save-info", Static).render().plain
         assert str(app.screen.query_one("#save", Button).label) == "Overwrite"
-        assert (reviewable.root / "acme-analyst.pdf").read_bytes() == b"old"
+        assert (reviewable.root / "Ada-Example-Resume.pdf").read_bytes() == b"old"
         await pilot.pause(0.3)
         await pilot.click("#save")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "RenderScreen"
-    assert (reviewable.root / "acme-analyst.pdf").read_bytes() == b"%PDF-1.4 new"
+    assert (reviewable.root / "Ada-Example-Resume.pdf").read_bytes() == b"%PDF-1.4 new"
 
 
 async def test_save_rejects_paths_and_render_output(jobs_dir, reviewable, decided, monkeypatch):
