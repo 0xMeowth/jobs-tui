@@ -245,6 +245,22 @@ async def test_failed_render_does_not_open_pdf(jobs_dir, reviewable, monkeypatch
     assert opened == []
 
 
+async def test_command_bar_ignores_results_while_closing(jobs_dir):
+    from jobs_tui import bridge as bridge_mod
+    from jobs_tui.app import CommandBar
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        bar = app.screen.query_one(CommandBar)
+        await bar.query_one("#agent-state").remove()
+        await bar.query_one("#agent-pane").remove()
+        assert bar.is_mounted
+        bar._show_status(bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "t", "jobs"))
+        bar._show_panes([("codex", "wK:p1")])
+        await pilot.pause()
+        assert app.is_running
+
+
 async def test_command_bar_lists_panes_and_pairs(jobs_dir, monkeypatch):
     two_panes(monkeypatch, [])
     app = JobsApp(jobs_dir)

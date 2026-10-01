@@ -70,7 +70,10 @@ class CommandBar(Widget):
                 return  # pairing changed while the worker ran; wait for the next refresh
             app.bridge.pane_id = None
         app.pane_options = options
-        select = self.query_one("#agent-pane", Select)
+        try:
+            select = self.query_one("#agent-pane", Select)
+        except NoMatches:
+            return  # the bar is being removed with its screen
         if options != select._options[1:] or select.value != (app.bridge.pane_id or Select.NULL):
             with select.prevent(Select.Changed):
                 select.set_options(options)
@@ -99,7 +102,10 @@ class CommandBar(Widget):
         app: JobsApp = self.app  # type: ignore[assignment]
         status = (pane.status if pane.status in ("working", "blocked") else "idle") if pane else ""
         parts = [status, pages_text(app.pages) if app.pages is not None else ""]
-        self.query_one("#agent-state", Static).update(" · ".join(x for x in parts if x))
+        try:
+            self.query_one("#agent-state", Static).update(" · ".join(x for x in parts if x))
+        except NoMatches:
+            pass  # the bar is being removed with its screen
 
     def on_key(self, event: Key) -> None:
         select = self.query_one("#agent-pane", Select)
