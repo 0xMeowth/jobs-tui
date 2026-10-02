@@ -25,9 +25,10 @@ Role: {role}
 2. For each term, find every bullet in resume.yaml that already demonstrates it. Rewrite that bullet to use the posting's exact phrase. Use a synonym only when the exact phrase would misstate what was done.
 3. Do not add any skill, tool, metric, date, title, employer, credential or outcome that is not already in resume.yaml. When a bullet would be stronger with a number that resume.yaml does not contain, rewrite it without the number and name the missing number in that edit's reason field.
 4. Write every rewritten bullet as one sentence: strong verb, what was done, scale or context, result.
-5. Reorder bullets within an entry so the ones matching this posting come first. Do not reorder entries. Do not change dates, titles or employer names.
-6. Do not remove bullets.
-7. Before writing proposed-edits.json, send one chat message listing the posting requirements that no bullet in resume.yaml can honestly support, and wait for a reply. Then write proposed-edits.json.
+5. Spell every bullet the way the posting does, British or American, consistently across the whole resume. If the posting gives no clear signal, use British English spelling.
+6. Reorder bullets within an entry so the ones matching this posting come first. Do not reorder entries. Do not change dates, titles or employer names.
+7. Do not remove bullets.
+8. Before writing proposed-edits.json, send one chat message listing the posting requirements that no bullet in resume.yaml can honestly support, and wait for a reply. Then write proposed-edits.json.
 
 ## User focus
 
