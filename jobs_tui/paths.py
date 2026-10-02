@@ -63,3 +63,4 @@ def list_applications(jobs: Path) -> list[AppPaths]:
 def master_yaml(jobs: Path) -> Path: return jobs / "templates" / "resume-master.yaml"
 def template_typ(jobs: Path) -> Path: return jobs / "templates" / "resume.typ"
 def tracker_md(jobs: Path) -> Path: return jobs / "tracker.md"
+def settings_json(jobs: Path) -> Path: return jobs / "settings.json"

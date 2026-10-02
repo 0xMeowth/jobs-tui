@@ -2291,3 +2291,63 @@ async def test_send_feedback_relists_still_sent_edits(jobs_dir, reviewable, monk
     d = load_feedback(reviewable.review_feedback)
     assert d["e1"].sent_proposed == "Built and deployed a churn model"
     assert d["e2"].sent_proposed == "Automated reporting"
+
+
+async def test_comma_opens_settings_and_saves_toggles(jobs_dir):
+    from textual.widgets import Checkbox
+    from jobs_tui import settings
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("comma")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "SettingsScreen"
+        assert app.screen.query_one("#local-checks", Checkbox).value is True
+        assert app.screen.query_one("#agent-checks", Checkbox).value is False
+        await pilot.click("#local-checks")
+        await pilot.click("#agent-checks")
+        await pilot.pause()
+        assert settings.load(jobs_dir) == settings.Settings(local_checks=False, agent_checks=True)
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
+async def test_settings_locked_while_check_pending(jobs_dir, monkeypatch):
+    from textual.widgets import Checkbox
+    monkeypatch.setattr(JobsApp, "check_pending", lambda self: True)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("comma")
+        await pilot.pause()
+        assert app.screen.query_one("#local-checks", Checkbox).disabled
+        assert app.screen.query_one("#agent-checks", Checkbox).disabled
+        assert app.screen.query("#settings-locked")
+
+
+async def test_comma_types_into_inputs(jobs_dir):
+    from textual.widgets import Input
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.click("#company")
+        await pilot.press(*"a,b")
+        await pilot.pause()
+        assert app.screen.query_one("#company", Input).value == "a,b"
+
+
+async def test_every_help_line_lists_settings_and_pair(jobs_dir, reviewable, monkeypatch):
+    from jobs_tui import render
+    from textual.widgets import Static
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        for keys in ([], ["enter"], ["r"], ["escape", "escape", "t"]):
+            await pilot.press(*keys)
+            await pilot.pause()
+            help_text = str(app.screen.query(".help").first(Static).content)
+            assert ", settings" in help_text and "p pair" in help_text, help_text

@@ -16,7 +16,7 @@ class TrackerScreen(Screen[Path | None]):
     BINDINGS = [Binding("escape", "back", "Back")]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]TRACKER[/b]  submitted applications · Enter select · Esc back", classes="help")
+        yield Static("[b]TRACKER[/b]  submitted applications · Enter select · p pair · , settings · Esc back", classes="help")
         yield Static("No submitted applications yet. Finalize one with f.", id="tracker-empty")
         yield DataTable(id="tracker-table", cursor_type="row")
         yield CommandBar()

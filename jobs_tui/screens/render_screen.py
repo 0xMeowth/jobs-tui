@@ -31,7 +31,7 @@ class RenderScreen(Screen):
         self.p = p
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]RENDER[/b]  o open PDF · s save PDF · f finalize · p pair · Esc back", classes="help")
+        yield Static("[b]RENDER[/b]  o open PDF · s save PDF · f finalize · p pair · , settings · Esc back", classes="help")
         yield Static("Rendering…", id="render-info")
         yield CommandBar()
 

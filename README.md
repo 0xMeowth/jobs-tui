@@ -70,6 +70,7 @@ Open the app in one herdr pane and your agent in another. On launch the app asks
 - `r` renders `resume.pdf`, opens it, and shows the page count. `o` reopens it. `s` on that screen saves a copy of the PDF under a name you choose, in the application folder, once it fits two pages and is rendered from the current resume.yaml.
 - `f` finalizes after you submit. It records the date and adds a row to `tracker.md`.
 - Save and finalize both refuse while the review is unfinished: every edit must be accepted or rejected, and a sent brief must have produced proposed-edits.json.
+- `,` opens settings on any screen. They turn the final check before saving on or off: local checks (on by default) and agent checks (off by default). They are stored in `$JOBS_DIR/settings.json`.
 - `x` on the list deletes a draft after confirmation. Submitted applications cannot be deleted.
 
 ## Data folder layout

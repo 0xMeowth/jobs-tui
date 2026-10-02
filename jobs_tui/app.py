@@ -118,7 +118,7 @@ class CommandBar(Widget):
 class JobsApp(App):
     CSS_PATH = "app.tcss"
     pair_on_launch = True
-    BINDINGS = [Binding("p", "focus_pair", "Pair")]
+    BINDINGS = [Binding("p", "focus_pair", "Pair"), Binding("comma", "settings", "Settings", key_display=",")]
 
     def __init__(self, jobs: Path):
         super().__init__()
@@ -158,6 +158,14 @@ class JobsApp(App):
     def action_focus_pair(self) -> None:
         if isinstance(select := self._enter_bar("#agent-pane"), Select):
             select.action_show_overlay()
+
+    def action_settings(self) -> None:
+        from jobs_tui.screens.settings import SettingsScreen
+        if not isinstance(self.screen, SettingsScreen):
+            self.push_screen(SettingsScreen())
+
+    def check_pending(self) -> bool:
+        return False
 
     def unpaired_message(self) -> str:
         return "No agent paired. Press p to pair." if bridge.in_herdr() else "Not running inside herdr. Start the app in a herdr pane to reach the agent."
