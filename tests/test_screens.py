@@ -1018,6 +1018,23 @@ async def test_launch_opens_pair_dialog_in_herdr(jobs_dir, two_apps, monkeypatch
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
 
 
+async def test_enter_in_launch_dialog_pairs_in_one_step(jobs_dir, two_apps, monkeypatch):
+    two_panes(monkeypatch, [])
+    monkeypatch.setattr(JobsApp, "pair_on_launch", True)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        from textual.widgets import Button, Select
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if app.screen.__class__.__name__ == "PairScreen" and app.screen.query_one("#pair-select", Select).expanded:
+                break
+        assert not app.screen.query("#continue") and app.screen.query_one("#cancel", Button)
+        await pilot.press("down", "enter")
+        await pilot.pause()
+        assert app.bridge.pane_id == "wK:p1"
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
 async def test_launch_skips_pair_dialog_outside_herdr(jobs_dir, two_apps, monkeypatch):
     monkeypatch.setattr(JobsApp, "pair_on_launch", True)
     app = JobsApp(jobs_dir)
@@ -1684,7 +1701,6 @@ async def test_brief_asks_to_pair_when_unpaired_in_herdr(jobs_dir, two_apps, mon
         await pilot.pause()
         assert app.screen.__class__.__name__ == "PairScreen"
         app.screen.query_one("#pair-select", Select).value = "wK:p1"
-        await pilot.click("#continue")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "BriefScreen"
         assert app.bridge.pane_id == "wK:p1"

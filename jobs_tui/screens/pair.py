@@ -14,11 +14,10 @@ class PairScreen(ModalScreen[bool]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("[b]Pair an agent pane[/b]  Review prompts go to this pane.")
+            yield Label("[b]Pair an agent pane[/b]  Pick the pane; Enter pairs it. Review prompts go to this pane.")
             yield Static("Looking for agent panes…", id="pair-status")
             yield Select(self.app.pane_options, allow_blank=True, prompt="Pick an agent pane", id="pair-select")
             with Horizontal():
-                yield Button("Continue", variant="primary", id="continue")
                 yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
@@ -56,10 +55,10 @@ class PairScreen(ModalScreen[bool]):
     def action_cancel(self) -> None:
         self.dismiss(False)
 
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.value is not Select.NULL and self.is_current:
+            self.app.bridge.pane_id = str(event.value)
+            self.dismiss(True)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        value = self.query_one("#pair-select", Select).value
-        if event.button.id != "continue" or value is Select.NULL:
-            self.dismiss(False)
-            return
-        self.app.bridge.pane_id = str(value)
-        self.dismiss(True)
+        self.dismiss(False)
