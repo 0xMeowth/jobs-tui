@@ -1,6 +1,7 @@
 from functools import partial
 from pathlib import Path
 
+import yaml
 from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -16,6 +17,27 @@ from jobs_tui.paths import AppPaths
 
 def pages_text(n: int) -> str:
     return f"{n} page" if n == 1 else f"{n} pages"
+
+
+def check_label(app: "JobsApp") -> str:
+    from jobs_tui import checks, settings
+    p = app.current
+    if p is None or not settings.load(app.jobs).local_checks:
+        return ""
+    try:
+        st = checks.load_state(p.final_check)
+        if st["status"] == "skipped":
+            return "check skipped"
+        if st["status"] == "not checked":
+            return "not checked"
+        data = yaml.safe_load(p.resume_yaml.read_text())
+        if st["status"] == "checked":
+            n = checks.changed_since(data, st)
+            return f"checked · {n} bullet{'s' if n != 1 else ''} changed since" if n else "checked"
+        jd = p.jd_md.read_text() if p.jd_md.exists() else ""
+        return f"check: {len(checks.open_findings(data, jd, st))} to fix"
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError):
+        return ""
 
 
 class CommandBar(Widget):
@@ -94,14 +116,14 @@ class CommandBar(Widget):
     def _fetch_status(self) -> None:
         app: JobsApp = self.app  # type: ignore[assignment]
         pane = app.bridge.pane()
-        app.call_from_thread(self._show_status, pane)
+        app.call_from_thread(self._show_status, pane, check_label(app))
 
-    def _show_status(self, pane: Pane | None) -> None:
+    def _show_status(self, pane: Pane | None, check: str = "") -> None:
         if not self.is_mounted:
             return
         app: JobsApp = self.app  # type: ignore[assignment]
         status = (pane.status if pane.status in ("working", "blocked") else "idle") if pane else ""
-        parts = [status, pages_text(app.pages) if app.pages is not None else ""]
+        parts = [status, pages_text(app.pages) if app.pages is not None else "", check]
         try:
             self.query_one("#agent-state", Static).update(" · ".join(x for x in parts if x))
         except NoMatches:

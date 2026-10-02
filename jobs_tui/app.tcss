@@ -1,6 +1,11 @@
 Screen { layout: vertical; }
 #body { height: 1fr; }
 #app-list, #edit-list { width: 34; border: solid $primary; }
+#check-panel { height: 1fr; }
+#check-body { height: 1fr; }
+#check-list { width: 34; border: solid $primary; }
+#check-detail { width: 1fr; border: solid $secondary; padding: 0 1; }
+#check-head { padding: 0 1; }
 #edit-list Horizontal { height: auto; }
 #edit-list .edit-label { width: 1fr; }
 #edit-list .edit-round { width: auto; color: $text-muted; }

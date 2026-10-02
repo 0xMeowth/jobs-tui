@@ -1496,7 +1496,7 @@ async def test_page_count_is_singular_for_one_page(jobs_dir, reviewable, monkeyp
             await pilot.pause(0.05)
             if "page" in str(state.content):
                 break
-        assert str(state.content) == "1 page"
+        assert str(state.content).startswith("1 page") and "1 pages" not in str(state.content)
 
 
 async def test_delete_dialog_shows_relative_folder(jobs_dir, two_apps):
@@ -2351,3 +2351,173 @@ async def test_every_help_line_lists_settings_and_pair(jobs_dir, reviewable, mon
             await pilot.pause()
             help_text = str(app.screen.query(".help").first(Static).content)
             assert ", settings" in help_text and "p pair" in help_text, help_text
+
+
+def set_bullet(p, path, text):
+    from jobs_tui.model import Resume
+    r = Resume.load(p.resume_yaml)
+    r.set(path, text)
+    r.save(p.resume_yaml)
+
+
+def fresh_render(monkeypatch, pages=2):
+    from jobs_tui import render
+    def fake(jobs, p):
+        p.resume_pdf.write_bytes(b"%PDF")
+        return render.RenderResult(p.resume_pdf, pages)
+    monkeypatch.setattr(render, "render", fake)
+    monkeypatch.setattr(render, "page_count", lambda pdf: pages)
+
+
+async def press_render_save(pilot):
+    await pilot.pause()
+    await pilot.press("r")
+    await pilot.pause(0.3)
+    await pilot.press("s")
+    await pilot.pause(0.3)
+
+
+def check_state(p):
+    import json
+    return json.loads(p.final_check.read_text())
+
+
+async def test_clean_local_check_opens_save_and_records_checked(jobs_dir, reviewable, decided, monkeypatch):
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await press_render_save(pilot)
+        assert app.screen.__class__.__name__ == "SaveScreen"
+    st = check_state(reviewable)
+    assert st["status"] == "checked" and st["checks"] == ["local"]
+
+
+async def test_local_findings_block_then_fix_opens_save(jobs_dir, reviewable, decided, monkeypatch):
+    from textual.widgets import ListView
+    from jobs_tui.model import Resume
+    set_bullet(reviewable, "globex.b1.text", "Wrote requirements,tested a pricing tool")
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await press_render_save(pilot)
+        assert app.screen.__class__.__name__ == "RenderScreen"
+        assert len(app.screen.query_one("#check-list", ListView).children) == 1
+        assert check_state(reviewable)["status"] == "findings"
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        assert app.screen.__class__.__name__ == "SaveScreen"
+    assert Resume.load(reviewable.resume_yaml).get("globex.b1.text") == "Wrote requirements, tested a pricing tool"
+    assert check_state(reviewable)["status"] == "checked"
+
+
+async def test_dismissed_finding_counts_as_resolved_and_is_not_rechecked(jobs_dir, reviewable, decided, monkeypatch):
+    from jobs_tui.model import Resume
+    set_bullet(reviewable, "globex.b1.text", "Wrote requirements,tested a pricing tool")
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await press_render_save(pilot)
+        await pilot.press("x")
+        await pilot.pause(0.3)
+        assert app.screen.__class__.__name__ == "SaveScreen"
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.press("s")
+        await pilot.pause(0.3)
+        assert app.screen.__class__.__name__ == "SaveScreen"
+    assert Resume.load(reviewable.resume_yaml).get("globex.b1.text") == "Wrote requirements,tested a pricing tool"
+
+
+async def test_undo_restores_fix_and_dismissal(jobs_dir, reviewable, decided, monkeypatch):
+    from textual.widgets import ListView
+    from jobs_tui.model import Resume
+    set_bullet(reviewable, "globex.b1.text", "Wrote requirements,tested a pricing tool")
+    set_bullet(reviewable, "acme.b2.text", "Automated weekly reporting  in SQL")
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await press_render_save(pilot)
+        lv = app.screen.query_one("#check-list", ListView)
+        assert len(lv.children) == 2
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        assert app.screen.__class__.__name__ == "RenderScreen"
+        lv.index = 1
+        await pilot.press("u")
+        await pilot.pause(0.3)
+        assert Resume.load(reviewable.resume_yaml).get("acme.b2.text") == "Automated weekly reporting  in SQL"
+        assert check_state(reviewable)["status"] == "findings"
+
+
+async def test_stale_finding_refuses_fix(jobs_dir, reviewable, decided, monkeypatch):
+    from jobs_tui.model import Resume
+    set_bullet(reviewable, "globex.b1.text", "Wrote requirements,tested a pricing tool")
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    notes = record_notes(app)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await press_render_save(pilot)
+        set_bullet(reviewable, "globex.b1.text", "Rewrote it by hand,again")
+        await pilot.press("a")
+        await pilot.pause(0.3)
+    assert Resume.load(reviewable.resume_yaml).get("globex.b1.text") == "Rewrote it by hand,again"
+    assert any("changed since the check" in n for n in notes)
+
+
+async def test_checks_off_saves_without_checking(jobs_dir, reviewable, decided, monkeypatch):
+    from jobs_tui import settings
+    settings.save(jobs_dir, settings.Settings(local_checks=False, agent_checks=False))
+    set_bullet(reviewable, "globex.b1.text", "Wrote requirements,tested a pricing tool")
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await press_render_save(pilot)
+        assert app.screen.__class__.__name__ == "SaveScreen"
+    assert not reviewable.final_check.exists()
+
+
+async def test_shift_s_skips_check_after_confirm(jobs_dir, reviewable, decided, monkeypatch):
+    set_bullet(reviewable, "globex.b1.text", "Wrote requirements,tested a pricing tool")
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause(0.3)
+        await pilot.press("S")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "SkipCheckScreen"
+        await pilot.click("#yes")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "SaveScreen"
+    assert check_state(reviewable)["status"] == "skipped"
+
+
+async def test_changed_since_check_is_shown_on_save(jobs_dir, reviewable, decided, monkeypatch):
+    from textual.widgets import Static
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await press_render_save(pilot)
+        await pilot.press("escape")
+        await pilot.pause()
+        set_bullet(reviewable, "acme.b2.text", "Automated reporting")
+        await pilot.press("escape")
+        await pilot.pause()
+        await press_render_save(pilot)
+        assert app.screen.__class__.__name__ == "SaveScreen"
+        assert "1 bullet changed since the final check" in app.screen.query_one("#save-info", Static).render().plain
+
+
+async def test_bar_shows_check_status(jobs_dir, reviewable, decided, monkeypatch):
+    from textual.widgets import Static
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        state = app.screen.query_one("#agent-state", Static)
+        for _ in range(40):
+            await pilot.pause(0.05)
+            if "not checked" in str(state.content):
+                break
+        assert "not checked" in str(state.content)

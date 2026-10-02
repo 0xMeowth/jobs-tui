@@ -45,6 +45,8 @@ class AppPaths:
     def resume_pdf(self) -> Path: return self.root / "resume.pdf"
     @property
     def preview_dir(self) -> Path: return self.root / "preview"
+    @property
+    def final_check(self) -> Path: return self.root / "final-check.json"
 
 
 def app_paths(jobs: Path, company: str, role: str) -> AppPaths:

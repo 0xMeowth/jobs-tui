@@ -57,13 +57,16 @@ def default_pdf_name(p: AppPaths) -> str:
 class SaveScreen(ModalScreen[bool]):
     BINDINGS = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, p: AppPaths) -> None:
+    def __init__(self, p: AppPaths, note: str = "") -> None:
         super().__init__()
         self.p = p
+        self.note = note
         self.confirm: str | None = None
 
     def compose(self) -> ComposeResult:
         ok, message = check_pdf(self.p)
+        if ok and self.note:
+            message += " " + escape(self.note)
         with Vertical(id="dialog"):
             yield Label("[b]Save PDF[/b]")
             yield Static(message, id="save-info")
