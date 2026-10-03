@@ -2537,8 +2537,8 @@ async def test_tracker_page_hides_url_and_marks_notes(jobs_dir, two_apps):
         await pilot.press("t")
         await pilot.pause()
         table = app.screen.query_one("#tracker-table", DataTable)
-        assert [str(c.label) for c in table.columns.values()] == ["Submitted", "Company", "Role", "Folder", "Notes"]
-        notes = {str(table.get_row_at(i)[1]): str(table.get_row_at(i)[4]) for i in range(table.row_count)}
+        assert [str(c.label) for c in table.columns.values()] == ["Submitted", "Company", "Role", "Notes"]
+        notes = {str(table.get_row_at(i)[1]): str(table.get_row_at(i)[3]) for i in range(table.row_count)}
         assert notes == {"Northwind": "✓", "Acme": ""}
     assert "https://x/1" in paths.tracker_md(jobs_dir).read_text()
 

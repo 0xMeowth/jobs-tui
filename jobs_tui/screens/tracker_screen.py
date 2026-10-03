@@ -23,7 +23,7 @@ class TrackerScreen(Screen[Path | None]):
 
     def on_mount(self) -> None:
         table = self.query_one("#tracker-table", DataTable)
-        table.add_columns("Submitted", "Company", "Role", "Folder", "Notes")
+        table.add_columns("Submitted", "Company", "Role", "Notes")
         self.rows = tracker.read(tracker_md(self.app.jobs))
         self.query_one("#tracker-empty", Static).display = not self.rows
         table.display = bool(self.rows)
@@ -32,7 +32,6 @@ class TrackerScreen(Screen[Path | None]):
                 escape(r.submitted),
                 escape(r.company),
                 escape(r.role),
-                escape(r.folder),
                 "✓" if (self.app.jobs / r.folder / "notes.md").exists() else "",
                 key=str(i),
             )
