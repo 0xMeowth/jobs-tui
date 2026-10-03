@@ -42,7 +42,7 @@ class AppPaths:
     @property
     def review_feedback(self) -> Path: return self.root / "review-feedback.json"
     @property
-    def resume_pdf(self) -> Path: return self.root / "resume.pdf"
+    def resume_pdf(self) -> Path: return self.preview_dir / "resume.pdf"
     @property
     def preview_dir(self) -> Path: return self.root / "preview"
     @property

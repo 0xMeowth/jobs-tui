@@ -764,19 +764,19 @@ async def test_save_asks_before_overwrite(jobs_dir, reviewable, decided, monkeyp
     assert (reviewable.root / "Ada-Example-Resume.pdf").read_bytes() == b"%PDF-1.4 new"
 
 
-async def test_save_rejects_paths_and_render_output(jobs_dir, reviewable, decided, monkeypatch):
+async def test_save_rejects_paths(jobs_dir, reviewable, decided, monkeypatch):
     from textual.widgets import Input, Static
     reviewable.resume_pdf.write_bytes(b"%PDF-1.4 fake")
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
         await open_save(pilot, monkeypatch)
-        for bad in ("../x.pdf", "sub/x.pdf", "resume.pdf", "  "):
+        for bad in ("../x.pdf", "sub/x.pdf", "  "):
             app.screen.query_one("#save-name", Input).value = bad
             await pilot.click("#save")
             await pilot.pause(0.3)
             assert app.screen.__class__.__name__ == "SaveScreen", bad
             assert app.screen.query_one("#save-info", Static).render().plain
-    assert sorted(f.name for f in reviewable.root.glob("*.pdf")) == ["resume.pdf"]
+    assert list(reviewable.root.glob("*.pdf")) == []
     assert not (jobs_dir / "companies" / "acme" / "x.pdf").exists()
 
 

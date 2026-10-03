@@ -42,7 +42,7 @@ def check_pdf(p: AppPaths) -> tuple[bool, str]:
         return False, f"Could not read the PDF: {escape(str(err))}"
     if pages > 2:
         return False, f"Resume has {pages_text(pages)}. It must fit 2 before saving."
-    return True, f"Resume has {pages_text(pages)}. Saves a copy of resume.pdf in this application's folder."
+    return True, f"Resume has {pages_text(pages)}. Saves a copy of the rendered PDF in this application's folder."
 
 
 def default_pdf_name(p: AppPaths) -> str:
@@ -107,9 +107,6 @@ class SaveScreen(ModalScreen[bool]):
         name = self.target()
         if name is None:
             info.update("Enter a file name, not a path.")
-            return
-        if name == self.p.resume_pdf.name:
-            info.update("resume.pdf is the render output. Pick another name.")
             return
         dest = self.p.root / name
         if dest.exists() and self.confirm != name:

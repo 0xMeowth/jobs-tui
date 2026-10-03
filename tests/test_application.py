@@ -16,6 +16,7 @@ def test_create_writes_meta_and_copies_master(jobs_dir):
         "created": date.today().isoformat(), "submitted_date": None,
     }
     assert p.resume_yaml.read_text() == "name: Test\nsections: []\n"
+    assert p.preview_dir.is_dir()
 
 
 def test_create_refuses_duplicate(jobs_dir):

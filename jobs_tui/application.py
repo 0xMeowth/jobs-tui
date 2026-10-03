@@ -56,6 +56,7 @@ def create(jobs: Path, company: str, role: str, url: str | None) -> AppPaths:
     if p.root.exists():
         raise FileExistsError(p.root)
     p.root.mkdir(parents=True)
+    p.preview_dir.mkdir()
     try:
         shutil.copy(master_yaml(jobs), p.resume_yaml)
         save(p, Application(company=company, role=role, url=url or None, created=date.today().isoformat()))

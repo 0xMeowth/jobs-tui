@@ -52,3 +52,12 @@ def test_starter_template_handles_projects_and_contact(jobs_dir, app):
     assert text.splitlines()[0] == "Ada Example"
     assert "Wellington | (65) 0000 0000 | ada@example.com" in text
     assert "github.com/ada/recipe-bot" in text
+
+
+@needs_typst
+def test_render_creates_preview_folder_for_older_applications(jobs_dir, app):
+    import shutil
+    shutil.rmtree(app.preview_dir, ignore_errors=True)
+    r = render.render(jobs_dir, app)
+    assert r.pdf == app.preview_dir / "resume.pdf" and r.pdf.exists()
+    assert not (app.root / "resume.pdf").exists()

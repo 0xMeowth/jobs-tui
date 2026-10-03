@@ -37,6 +37,7 @@ def page_count(pdf: Path) -> int:
 
 def compile(jobs: Path, p: AppPaths) -> Path:
     resume_rel = "/" + str(p.resume_yaml.relative_to(jobs))
+    p.preview_dir.mkdir(exist_ok=True)
     cmd = ["typst", "compile", "--root", str(jobs), "--input", f"resume={resume_rel}", str(template_typ(jobs)), str(p.resume_pdf)]
     _run_tool(cmd)
     return p.resume_pdf
