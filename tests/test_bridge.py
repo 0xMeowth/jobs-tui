@@ -77,6 +77,8 @@ def test_pane_context_reads_footer(monkeypatch):
     monkeypatch.setattr(bridge, "_run", lambda args: calls.append(args) or footer)
     assert bridge.pane_context("wE:p1") == 20
     assert calls[0][:3] == ["pane", "read", "wE:p1"]
+    monkeypatch.setattr(bridge, "_run", lambda args: "  GPT-5.6-Sol default · ~/dev/jobs · Respond to greeting · Context 30% used\n")
+    assert bridge.pane_context("wK:p1") == 30
     monkeypatch.setattr(bridge, "_run", lambda args: "no context here")
     assert bridge.pane_context("wE:p1") is None
     def boom(args):

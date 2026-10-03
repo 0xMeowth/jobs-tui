@@ -71,7 +71,7 @@ Terminal app for tailoring one resume per job application. You keep a master res
 
 ## Daily use
 
-Open the app in one herdr pane and your agent in another. On launch the app asks you to pick the agent pane. Press `p` later to change it. The list labels each pane with its agent and workspace, and with its context use when the pane footer shows `ctx: N%`. Sending with `s` or Start review is refused until a pane is paired. Keys are listed at the top of every screen.
+Open the app in one herdr pane and your agent in another. On launch the app asks you to pick the agent pane. Press `p` later to change it. The list labels each pane with its agent and workspace, and with its context use when the pane footer shows it: `ctx: N%` (a Claude Code status line) or `Context N% used` (Codex `/statusline` with context-used). Sending with `s` or Start review is refused until a pane is paired. Keys are listed at the top of every screen.
 
 - `n` new application. Paste the posting URL and press Enter. Company and role fill in from the page, and you can correct them before the folder is created. LinkedIn URLs use the public guest endpoint. Other sites are fetched over HTTP, then with Chrome if needed. No URL? Paste the description and type company and role yourself.
 - If no agent pane is paired yet, a dialog asks you to pick one. Then the brief dialog opens. Say what the agent should focus on, then press Start review. The app writes `review-request.md` into the application folder and tells the agent to read it.

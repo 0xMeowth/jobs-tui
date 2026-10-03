@@ -58,7 +58,7 @@ def list_agent_panes() -> list[Pane]:
     return [pane for pane, _ in panes]
 
 
-CONTEXT = [re.compile(r"\bctx:\s*(\d{1,3})%")]
+CONTEXT = [re.compile(r"\bctx:\s*(\d{1,3})%"), re.compile(r"\bContext (\d{1,3})% used")]
 
 
 def pane_label(p: Pane, ctx: int | None = None) -> str:
