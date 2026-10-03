@@ -186,9 +186,6 @@ class JobsApp(App):
         if not isinstance(self.screen, SettingsScreen):
             self.push_screen(SettingsScreen())
 
-    def check_pending(self) -> bool:
-        return False
-
     def unpaired_message(self) -> str:
         return "No agent paired. Press p to pair." if bridge.in_herdr() else "Not running inside herdr. Start the app in a herdr pane to reach the agent."
 

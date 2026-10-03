@@ -2319,27 +2319,13 @@ async def test_comma_opens_settings_and_saves_toggles(jobs_dir):
         await pilot.pause()
         assert app.screen.__class__.__name__ == "SettingsScreen"
         assert app.screen.query_one("#local-checks", Checkbox).value is True
-        assert app.screen.query_one("#agent-checks", Checkbox).value is False
+        assert not app.screen.query("#agent-checks")
         await pilot.click("#local-checks")
-        await pilot.click("#agent-checks")
         await pilot.pause()
-        assert settings.load(jobs_dir) == settings.Settings(local_checks=False, agent_checks=True)
+        assert settings.load(jobs_dir) == settings.Settings(local_checks=False)
         await pilot.press("escape")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
-
-
-async def test_settings_locked_while_check_pending(jobs_dir, monkeypatch):
-    from textual.widgets import Checkbox
-    monkeypatch.setattr(JobsApp, "check_pending", lambda self: True)
-    app = JobsApp(jobs_dir)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-        await pilot.press("comma")
-        await pilot.pause()
-        assert app.screen.query_one("#local-checks", Checkbox).disabled
-        assert app.screen.query_one("#agent-checks", Checkbox).disabled
-        assert app.screen.query("#settings-locked")
 
 
 async def test_comma_types_into_inputs(jobs_dir):
@@ -2482,7 +2468,7 @@ async def test_stale_finding_refuses_fix(jobs_dir, reviewable, decided, monkeypa
 
 async def test_checks_off_saves_without_checking(jobs_dir, reviewable, decided, monkeypatch):
     from jobs_tui import settings
-    settings.save(jobs_dir, settings.Settings(local_checks=False, agent_checks=False))
+    settings.save(jobs_dir, settings.Settings(local_checks=False))
     set_bullet(reviewable, "globex.b1.text", "Wrote requirements,tested a pricing tool")
     fresh_render(monkeypatch)
     app = JobsApp(jobs_dir)

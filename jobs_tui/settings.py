@@ -8,7 +8,6 @@ from jobs_tui.paths import settings_json
 @dataclass
 class Settings:
     local_checks: bool = True
-    agent_checks: bool = False
 
 
 def load(jobs: Path) -> Settings:

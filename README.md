@@ -71,7 +71,7 @@ Open the app in one herdr pane and your agent in another. On launch the app asks
 - Before the first save, `s` runs the final check over every job and project bullet: one spelling convention (the posting's, when it shows one), spacing, plain quotes and dashes, and trailing periods. Findings appear on the render screen: `a` fixes, `x` dismisses, `e` edits, `u` undoes. When none are left the PDF re-renders and the save dialog opens. The check runs once; the status bar shows `checked`, or how many bullets changed since. `S` saves without the check.
 - `f` finalizes after you submit. It records the date and adds a row to `tracker.md`.
 - Save and finalize both refuse while the review is unfinished: every edit must be accepted or rejected, and a sent brief must have produced proposed-edits.json.
-- `,` opens settings on any screen. They turn the final check before saving on or off: local checks (on by default) and agent checks (off by default). They are stored in `$JOBS_DIR/settings.json`.
+- `,` opens settings on any screen. It turns the final check before saving on or off (on by default). Settings are stored in `$JOBS_DIR/settings.json`.
 - `x` on the list deletes a draft after confirmation. Submitted applications cannot be deleted.
 
 ## Data folder layout
