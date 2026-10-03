@@ -1013,7 +1013,7 @@ async def test_launch_opens_pair_dialog_in_herdr(jobs_dir, two_apps, monkeypatch
         assert app.screen.__class__.__name__ == "PairScreen"
         select = app.screen.query_one("#pair-select", Select)
         assert select.expanded and len(select._options) - 1 == 2
-        await pilot.press("escape", "escape")
+        await pilot.press("escape")
         await pilot.pause()
         assert app.screen.__class__.__name__ == "ApplicationsScreen"
 

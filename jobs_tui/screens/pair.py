@@ -1,6 +1,7 @@
 from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Select, Static
 
@@ -51,6 +52,11 @@ class PairScreen(ModalScreen[bool]):
         select.display = True
         select.focus()
         select.action_show_overlay()
+
+    def on_key(self, event: Key) -> None:
+        if event.key == "escape" and self.query_one("#pair-select", Select).has_focus_within:
+            event.stop()
+            self.dismiss(False)
 
     def action_cancel(self) -> None:
         self.dismiss(False)
