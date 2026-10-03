@@ -26,12 +26,13 @@ class ApplicationsScreen(Screen):
         Binding("f", "finalize", "Finalize"),
         Binding("t", "tracker", "Tracker"),
         Binding("y", "edit_yaml", "Edit YAML"),
+        Binding("w", "notes", "Notes"),
         Binding("x", "delete_app", "Delete"),
         Binding("q", "app.quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter review · b brief · r render · f finalize · y yaml · x delete · t tracker · p pair · , settings · q quit", classes="help")
+        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter review · b brief · r render · f finalize · y yaml · w notes · x delete · t tracker · p pair · , settings · q quit", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="app-list")
             yield Static("No applications yet. Press n.", id="app-detail")
@@ -86,6 +87,8 @@ class ApplicationsScreen(Screen):
             f"Edits       {s['edits_pending']} pending of {s['edits_total']}",
             f"Pages       {s['pages'] if s['pages'] is not None else 'not rendered'}",
         ]
+        if p.notes_md.exists():
+            lines.append("Notes       saved · w opens")
         self.query_one("#app-detail", Static).update("\n".join(lines))
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
@@ -140,6 +143,11 @@ class ApplicationsScreen(Screen):
             self.app.push_screen(PairScreen(), paired)
         else:
             self.app.push_screen(BriefScreen(p), done)
+
+    def action_notes(self) -> None:
+        if self.app.current:
+            p = self.app.current
+            self.app.open_notes(p, lambda _: self.show_detail(p))
 
     def action_render(self) -> None:
         if self.app.current:

@@ -2523,3 +2523,76 @@ async def test_bar_shows_check_status(jobs_dir, reviewable, decided, monkeypatch
             if "not checked" in str(state.content):
                 break
         assert "not checked" in str(state.content)
+
+
+async def test_tracker_page_hides_url_and_marks_notes(jobs_dir, two_apps):
+    from textual.widgets import DataTable
+    from jobs_tui import tracker
+    tracker.insert(paths.tracker_md(jobs_dir), tracker.Row("2026-09-26", "Northwind", "AI Analyst", "companies/northwind/ai-analyst/", "https://x/1", ""))
+    tracker.insert(paths.tracker_md(jobs_dir), tracker.Row("2026-09-27", "Acme", "PM", "companies/acme/pm/", "https://x/2", ""))
+    (jobs_dir / "companies" / "northwind" / "ai-analyst" / "notes.md").write_text("Why us: ...\n")
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        table = app.screen.query_one("#tracker-table", DataTable)
+        assert [str(c.label) for c in table.columns.values()] == ["Submitted", "Company", "Role", "Folder", "Notes"]
+        notes = {str(table.get_row_at(i)[1]): str(table.get_row_at(i)[4]) for i in range(table.row_count)}
+        assert notes == {"Northwind": "✓", "Acme": ""}
+    assert "https://x/1" in paths.tracker_md(jobs_dir).read_text()
+
+
+async def test_w_writes_and_clears_notes(jobs_dir, two_apps):
+    from textual.widgets import Static, TextArea
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        p = app.current
+        await pilot.press("w")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "NotesScreen"
+        app.screen.query_one("#notes-text", TextArea).text = "Why us: long answer"
+        await pilot.click("#save")
+        await pilot.pause()
+        assert p.notes_md.read_text() == "Why us: long answer\n"
+        assert "Notes       saved · w opens" in app.screen.query_one("#app-detail", Static).render().plain
+        await pilot.press("w")
+        await pilot.pause()
+        assert app.screen.query_one("#notes-text", TextArea).text == "Why us: long answer\n"
+        app.screen.query_one("#notes-text", TextArea).text = "  "
+        await pilot.click("#save")
+        await pilot.pause()
+        assert not p.notes_md.exists()
+        assert "Notes" not in app.screen.query_one("#app-detail", Static).render().plain
+
+
+async def test_w_cancel_keeps_notes(jobs_dir, two_apps):
+    from textual.widgets import TextArea
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        app.current.notes_md.write_text("keep\n")
+        await pilot.press("w")
+        await pilot.pause()
+        app.screen.query_one("#notes-text", TextArea).text = "changed"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.current.notes_md.read_text() == "keep\n"
+
+
+async def test_w_works_on_review_and_render(jobs_dir, reviewable, monkeypatch):
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        for keys in (["enter"], ["r"]):
+            await pilot.press(*keys)
+            await pilot.pause(0.3)
+            await pilot.press("w")
+            await pilot.pause()
+            assert app.screen.__class__.__name__ == "NotesScreen"
+            await pilot.press("escape")
+            await pilot.pause()
+            help_text = str(app.screen.query(".help").first().content)
+            assert "w notes" in help_text, help_text

@@ -127,6 +127,7 @@ class ReviewScreen(Screen):
         Binding("A", "accept_all", "Accept all pending"),
         Binding("s", "send_feedback", "Send feedback"),
         Binding("r", "render", "Render"),
+        Binding("w", "notes", "Notes"),
         Binding("f", "finalize", "Finalize"),
         Binding("escape", "back", "Back"),
     ]
@@ -140,7 +141,7 @@ class ReviewScreen(Screen):
         self._stop = threading.Event()
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · f finalize · p pair · , settings · Esc back", classes="help")
+        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · w notes · f finalize · p pair · , settings · Esc back", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="edit-list")
             yield Static("", id="edit-detail")
@@ -451,6 +452,9 @@ class ReviewScreen(Screen):
         E.save_feedback(self.p.review_feedback, self.decisions, request={"round": round_no, "items": items})
         self.app.send_to_agent(bridge.feedback_prompt(self.p.root, round_no))
         self.call_later(self.reload)
+
+    def action_notes(self) -> None:
+        self.app.open_notes(self.p)
 
     def action_render(self) -> None:
         from jobs_tui.screens.render_screen import RenderScreen

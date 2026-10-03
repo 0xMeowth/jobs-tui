@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
@@ -180,6 +181,10 @@ class JobsApp(App):
     def action_focus_pair(self) -> None:
         if isinstance(select := self._enter_bar("#agent-pane"), Select):
             select.action_show_overlay()
+
+    def open_notes(self, p: AppPaths, done: Callable[[bool], None] | None = None) -> None:
+        from jobs_tui.screens.notes import NotesScreen
+        self.push_screen(NotesScreen(p), done)
 
     def action_settings(self) -> None:
         from jobs_tui.screens.settings import SettingsScreen

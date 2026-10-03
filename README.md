@@ -69,7 +69,8 @@ Open the app in one herdr pane and your agent in another. On launch the app asks
 - The review screen fills as the agent writes `proposed-edits.json`. `a` accepts and writes resume.yaml, `x` rejects, `e` lets you reword before accepting, `c` attaches a comment, which asks for a rework, even on a rejected edit. A reject keeps your original wording. `x` on a commented edit asks before it discards the comment. `u` undoes any verdict, and reverts an accepted replace or add if the bullet is unchanged since. Removes cannot be reverted. `s` sends all rework comments in one round, and marks the reworked edits as sent until the revision arrives. Revised edits show the previous wording, and `v` accepts that instead.
 - `r` renders the PDF (kept in `preview/`), opens it, and shows the page count. `o` reopens it. `s` on that screen saves a copy of the PDF under a name you choose, in the application folder, once it fits two pages and is rendered from the current resume.yaml.
 - Before the first save, `s` runs the final check over every job and project bullet: one spelling convention (the posting's, when it shows one), spacing, plain quotes and dashes, and trailing periods. Findings appear on the render screen: `a` fixes, `x` dismisses, `e` edits, `u` undoes. When none are left the PDF re-renders and the save dialog opens. The check runs once; the status bar shows `checked`, or how many bullets changed since. `S` saves without the check.
-- `f` finalizes after you submit. It records the date and adds a row to `tracker.md`.
+- `w` opens a notes editor for the selected application, on the list, review and render screens. Use it for text you wrote outside the CV, such as answers to portal questions. It is saved as `notes.md` without checks; saving it empty deletes it.
+- `f` finalizes after you submit. It records the date and adds a row to `tracker.md`. `t` shows the tracker; its Notes column shows ✓ when the application has notes.
 - Save and finalize both refuse while the review is unfinished: every edit must be accepted or rejected, and a sent brief must have produced proposed-edits.json.
 - `,` opens settings on any screen. It turns the final check before saving on or off (on by default). Settings are stored in `$JOBS_DIR/settings.json`.
 - `x` on the list deletes a draft after confirmation. Submitted applications cannot be deleted.
@@ -88,6 +89,7 @@ Open the app in one herdr pane and your agent in another. On launch the app asks
         proposed-edits.json           written by the agent
         review-feedback.json          your decisions
         final-check.json              final check state before saving
+        notes.md                      your notes for this application (w)
         <name>.pdf                    copies saved with s on the render screen
         preview/resume.pdf            latest render, plus page images
 

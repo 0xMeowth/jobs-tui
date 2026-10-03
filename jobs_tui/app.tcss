@@ -21,3 +21,4 @@ ModalScreen { align: center middle; }
 #dialog Button { margin: 1 1 0 0; }
 #dialog-diff { margin-top: 1; padding: 0 1; border: solid $secondary; max-height: 12; }
 TextArea { height: 8; }
+#notes-text { height: 20; }

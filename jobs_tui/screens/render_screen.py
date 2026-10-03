@@ -15,8 +15,8 @@ from jobs_tui.app import CommandBar
 from jobs_tui.model import Resume
 from jobs_tui.paths import AppPaths
 
-HELP = "[b]RENDER[/b]  o open PDF · s save PDF · S save without check · f finalize · p pair · , settings · Esc back"
-CHECK_HELP = "[b]RENDER[/b]  a fix · x dismiss · e edit · u undo · o open PDF · s save PDF · S save without check · f finalize · p pair · , settings · Esc back"
+HELP = "[b]RENDER[/b]  o open PDF · s save PDF · S save without check · w notes · f finalize · p pair · , settings · Esc back"
+CHECK_HELP = "[b]RENDER[/b]  a fix · x dismiss · e edit · u undo · o open PDF · s save PDF · S save without check · w notes · f finalize · p pair · , settings · Esc back"
 GLYPH = {"open": "○", "fixed": "●", "dismissed": "×"}
 
 
@@ -51,6 +51,7 @@ class RenderScreen(Screen):
         Binding("x", "dismiss_finding", "Dismiss"),
         Binding("e", "edit_finding", "Edit"),
         Binding("u", "undo_finding", "Undo"),
+        Binding("w", "notes", "Notes"),
         Binding("f", "finalize", "Finalize"),
         Binding("escape", "back", "Back"),
     ]
@@ -281,6 +282,9 @@ class RenderScreen(Screen):
             st["applied"].remove(item)
         checks.save_state(self.p.final_check, st)
         self.show_findings()
+
+    def action_notes(self) -> None:
+        self.app.open_notes(self.p)
 
     def action_finalize(self) -> None:
         from jobs_tui.screens.finalize import FinalizeScreen

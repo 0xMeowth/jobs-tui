@@ -47,6 +47,8 @@ class AppPaths:
     def preview_dir(self) -> Path: return self.root / "preview"
     @property
     def final_check(self) -> Path: return self.root / "final-check.json"
+    @property
+    def notes_md(self) -> Path: return self.root / "notes.md"
 
 
 def app_paths(jobs: Path, company: str, role: str) -> AppPaths:
