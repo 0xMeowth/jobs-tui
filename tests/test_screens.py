@@ -157,7 +157,7 @@ async def test_brief_writes_request_and_sends(jobs_dir, two_apps, monkeypatch):
         await pilot.press("b")
         await pilot.pause()
         from textual.widgets import Label, TextArea
-        assert any("Agent pane: codex · jobs · t" in str(l.content) for l in app.screen.query(Label))
+        assert any("Agent pane: codex · jobs" in str(l.content) for l in app.screen.query(Label))
         assert not app.screen.query("#pane")
         app.screen.query_one("#brief", TextArea).text = "Focus on analytics leadership."
         await pilot.click("#start")
@@ -269,7 +269,7 @@ async def test_command_bar_lists_panes_and_pairs(jobs_dir, monkeypatch):
         from textual.widgets import Select, Static
         select = app.screen.query_one("#agent-pane", Select)
         await wait_for_options(pilot, select, 2)
-        assert any("codex · jobs · Improve" in str(label) for label, _ in select._options)
+        assert [str(label) for label, _ in select._options[1:]] == ["codex · jobs", "claude · cv rewriting"]
         select.value = "wK:p1"
         await pilot.pause()
         assert app.bridge.pane_id == "wK:p1"
@@ -351,7 +351,7 @@ async def test_transient_list_failure_keeps_pairing(jobs_dir, monkeypatch):
 
 async def test_markup_in_pane_title_survives_screen_push(jobs_dir, reviewable, monkeypatch):
     from jobs_tui import bridge as bridge_mod
-    pane = bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "fix [/] bug", "jobs")
+    pane = bridge_mod.Pane("wK:p1", "codex", "idle", "/j", "t", "fix [/] bug")
     monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
     monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [pane])
     monkeypatch.setattr(bridge_mod, "get_pane", lambda pid: pane if pid == "wK:p1" else None)
@@ -1704,7 +1704,7 @@ async def test_brief_asks_to_pair_when_unpaired_in_herdr(jobs_dir, two_apps, mon
         await pilot.pause()
         assert app.screen.__class__.__name__ == "BriefScreen"
         assert app.bridge.pane_id == "wK:p1"
-        assert any("Agent pane: codex · jobs · Improve" in str(l.content) for l in app.screen.query(Label))
+        assert any("Agent pane: codex · jobs" in str(l.content) for l in app.screen.query(Label))
         await pilot.press("escape")
         await pilot.pause()
         assert app.screen.query_one("#agent-pane", Select).value == "wK:p1"
@@ -2596,3 +2596,61 @@ async def test_w_works_on_review_and_render(jobs_dir, reviewable, monkeypatch):
             await pilot.pause()
             help_text = str(app.screen.query(".help").first().content)
             assert "w notes" in help_text, help_text
+
+
+async def test_picker_prompt_when_panes_exist(jobs_dir, monkeypatch):
+    from textual.widgets import Select
+    two_panes(monkeypatch, [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        assert select.prompt == "Not paired: press p to pair"
+
+
+async def test_picker_prompt_when_no_panes(jobs_dir, monkeypatch):
+    from textual.widgets import Select
+    from jobs_tui import bridge as bridge_mod
+    monkeypatch.setattr(bridge_mod, "in_herdr", lambda: True)
+    monkeypatch.setattr(bridge_mod, "list_agent_panes", lambda: [])
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause(0.2)
+        assert app.screen.query_one("#agent-pane", Select).prompt == "No agent herdr panes: start codex or claude in another herdr pane"
+
+
+async def test_p_shows_context_and_refresh_keeps_it_while_open(jobs_dir, monkeypatch):
+    from textual.widgets import Select
+    from jobs_tui import bridge as bridge_mod
+    from jobs_tui.app import CommandBar
+    two_panes(monkeypatch, [])
+    monkeypatch.setattr(bridge_mod, "pane_context", lambda pid: {"wK:p1": 37}.get(pid))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        await pilot.press("p")
+        for _ in range(40):
+            await pilot.pause(0.05)
+            if select.expanded:
+                break
+        assert [str(label) for label, _ in select._options[1:]] == ["codex · jobs · ctx: 37%", "claude · cv rewriting"]
+        app.screen.query_one(CommandBar).refresh_panes()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert select.expanded and "ctx: 37%" in str(select._options[1][0])
+
+
+async def test_pair_dialog_shows_context(jobs_dir, two_apps, monkeypatch):
+    from textual.widgets import Select
+    from jobs_tui import bridge as bridge_mod
+    two_panes(monkeypatch, [])
+    monkeypatch.setattr(bridge_mod, "pane_context", lambda pid: 12)
+    monkeypatch.setattr(JobsApp, "pair_on_launch", True)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        for _ in range(40):
+            await pilot.pause(0.05)
+            if app.screen.__class__.__name__ == "PairScreen" and "ctx" in str(app.screen.query_one("#pair-select", Select)._options[-1][0]):
+                break
+        assert [str(label) for label, _ in app.screen.query_one("#pair-select", Select)._options[1:]] == ["codex · jobs · ctx: 12%", "claude · cv rewriting · ctx: 12%"]

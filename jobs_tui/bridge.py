@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -57,9 +58,22 @@ def list_agent_panes() -> list[Pane]:
     return [pane for pane, _ in panes]
 
 
-def pane_label(p: Pane) -> str:
-    title = p.title if len(p.title) <= 40 else p.title[:39] + "…"
-    return " · ".join(x for x in (p.agent, p.workspace, title) if x)
+CONTEXT = [re.compile(r"\bctx:\s*(\d{1,3})%")]
+
+
+def pane_label(p: Pane, ctx: int | None = None) -> str:
+    return " · ".join(x for x in (p.agent, p.workspace, f"ctx: {ctx}%" if ctx is not None else "") if x)
+
+
+def pane_context(pane_id: str) -> int | None:
+    try:
+        text = _run(["pane", "read", pane_id, "--source", "visible"])
+    except Exception:
+        return None
+    for pattern in CONTEXT:
+        if found := pattern.findall(text):
+            return int(found[-1])
+    return None
 
 
 def get_pane(pane_id: str) -> Pane | None:

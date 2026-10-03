@@ -65,11 +65,24 @@ def test_list_agent_panes_without_workspaces(fake_run, monkeypatch):
 
 
 def test_pane_label():
-    long = "Improve the resume bullets for the analytics role at Northwind"
-    p = bridge.Pane("wK:p1", "codex", "idle", "/b", long, "jobs")
-    assert bridge.pane_label(p) == "codex · jobs · " + long[:39] + "…"
-    assert bridge.pane_label(bridge.Pane("x", "claude", "idle", "/", "short", "")) == "claude · short"
-    assert bridge.pane_label(bridge.Pane("x", "claude", "idle", "/", "", "ws")) == "claude · ws"
+    p = bridge.Pane("wK:p1", "codex", "idle", "/b", "Respond to greeting", "jobs")
+    assert bridge.pane_label(p) == "codex · jobs"
+    assert bridge.pane_label(p, 37) == "codex · jobs · ctx: 37%"
+    assert bridge.pane_label(bridge.Pane("x", "claude", "idle", "/", "short", "")) == "claude"
+
+
+def test_pane_context_reads_footer(monkeypatch):
+    footer = "  Opus 5.5 [medium] | dev/jobs | main | ctx: 20%\n  auto mode on\n"
+    calls = []
+    monkeypatch.setattr(bridge, "_run", lambda args: calls.append(args) or footer)
+    assert bridge.pane_context("wE:p1") == 20
+    assert calls[0][:3] == ["pane", "read", "wE:p1"]
+    monkeypatch.setattr(bridge, "_run", lambda args: "no context here")
+    assert bridge.pane_context("wE:p1") is None
+    def boom(args):
+        raise RuntimeError("gone")
+    monkeypatch.setattr(bridge, "_run", boom)
+    assert bridge.pane_context("wE:p1") is None
 
 
 def test_get_pane(fake_run):

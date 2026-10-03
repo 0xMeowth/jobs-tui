@@ -29,7 +29,7 @@ class PairScreen(ModalScreen[bool]):
 
     def _fetch(self) -> None:
         panes = bridge.list_agent_panes() if bridge.in_herdr() else []
-        self.app.call_from_thread(self.show_options, [(escape(bridge.pane_label(p)), p.pane_id) for p in panes])
+        self.app.call_from_thread(self.show_options, [(escape(bridge.pane_label(p, bridge.pane_context(p.pane_id))), p.pane_id) for p in panes])
 
     def show_options(self, options: list[tuple[str, str]]) -> None:
         if not self.is_mounted:

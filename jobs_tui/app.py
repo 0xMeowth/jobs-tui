@@ -20,6 +20,10 @@ def pages_text(n: int) -> str:
     return f"{n} page" if n == 1 else f"{n} pages"
 
 
+def picker_prompt(options: list) -> str:
+    return "Not paired: press p to pair" if options else "No agent herdr panes: start codex or claude in another herdr pane"
+
+
 def check_label(app: "JobsApp") -> str:
     from jobs_tui import checks, settings
     p = app.current
@@ -46,7 +50,7 @@ class CommandBar(Widget):
         app: JobsApp = self.app  # type: ignore[assignment]
         options = app.pane_options
         value = app.bridge.pane_id if app.bridge.pane_id in [v for _, v in options] else Select.NULL
-        yield Select(options, value=value, allow_blank=True, prompt="No agent: press p to pair", id="agent-pane")
+        yield Select(options, value=value, allow_blank=True, prompt=picker_prompt(options), id="agent-pane")
         yield Static("", id="agent-state")
 
     def on_mount(self) -> None:
@@ -97,11 +101,40 @@ class CommandBar(Widget):
             select = self.query_one("#agent-pane", Select)
         except NoMatches:
             return  # the bar is being removed with its screen
+        select.prompt = picker_prompt(options)
+        if select.expanded:
+            return  # keep the open list and its context figures
         if options != select._options[1:] or select.value != (app.bridge.pane_id or Select.NULL):
             with select.prevent(Select.Changed):
                 select.set_options(options)
                 select.value = app.bridge.pane_id or Select.NULL
         self.refresh_status()
+
+    def open_list(self) -> None:
+        self.run_worker(self._fetch_with_context, thread=True, exclusive=True, group="open-list")
+
+    def _fetch_with_context(self) -> None:
+        app: JobsApp = self.app  # type: ignore[assignment]
+        panes = bridge.list_agent_panes() if bridge.in_herdr() else []
+        options = [(escape(pane_label(p, bridge.pane_context(p.pane_id))), p.pane_id) for p in panes] or None
+        app.call_from_thread(self._open_list, options)
+
+    def _open_list(self, options: list[tuple[str, str]] | None) -> None:
+        if not self.is_mounted:
+            return
+        app: JobsApp = self.app  # type: ignore[assignment]
+        try:
+            select = self.query_one("#agent-pane", Select)
+        except NoMatches:
+            return
+        if options is not None:
+            app.pane_options = options
+            with select.prevent(Select.Changed):
+                select.set_options(options)
+                select.value = app.bridge.pane_id if app.bridge.pane_id in [v for _, v in options] else Select.NULL
+            select.prompt = picker_prompt(options)
+        if app._enter_bar("#agent-pane") is select:
+            select.action_show_overlay()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id != "agent-pane":
@@ -179,8 +212,8 @@ class JobsApp(App):
             self.screen.set_focus(None)
 
     def action_focus_pair(self) -> None:
-        if isinstance(select := self._enter_bar("#agent-pane"), Select):
-            select.action_show_overlay()
+        for bar in self.screen.query(CommandBar).results(CommandBar):
+            bar.open_list()
 
     def open_notes(self, p: AppPaths, done: Callable[[bool], None] | None = None) -> None:
         from jobs_tui.screens.notes import NotesScreen
