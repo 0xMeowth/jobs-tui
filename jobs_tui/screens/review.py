@@ -14,7 +14,7 @@ from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, ListItem, ListView, Static, TextArea
 
 from jobs_tui import application, bridge, edits as E, guard, render
-from jobs_tui.app import CommandBar
+from jobs_tui.app import CommandBar, WordTextArea
 from jobs_tui.model import Resume, apply_edit
 from jobs_tui.paths import AppPaths
 from jobs_tui.watcher import watch_folder
@@ -45,7 +45,7 @@ class EditTextScreen(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             yield Label("[b]Edit proposal[/b]  Edit the wording, then accept")
-            yield TextArea(self.edit.proposed, id="edit-text")
+            yield WordTextArea(self.edit.proposed, id="edit-text")
             yield Static(edit_diff(self.edit), id="dialog-diff")
             with Horizontal():
                 yield Button("Accept", variant="primary", id="ok")
@@ -73,7 +73,7 @@ class CommentScreen(ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             yield Label("[b]Comment for the agent[/b]  The agent reworks this edit, rejected or not. Empty clears it. s sends rework comments.")
-            yield TextArea(self.text, id="comment")
+            yield WordTextArea(self.text, id="comment")
             yield Static(edit_diff(self.edit), id="dialog-diff")
             with Horizontal():
                 yield Button("Save comment", variant="primary", id="ok")

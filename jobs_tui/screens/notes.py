@@ -3,6 +3,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, TextArea
 
+from jobs_tui.app import WordTextArea
 from jobs_tui.paths import AppPaths
 
 
@@ -17,7 +18,7 @@ class NotesScreen(ModalScreen[bool]):
         text = self.p.notes_md.read_text() if self.p.notes_md.exists() else ""
         with Vertical(id="dialog"):
             yield Label("[b]Notes[/b]  Answers you wrote for this application, such as portal questions. Saved as notes.md.")
-            yield TextArea(text, id="notes-text")
+            yield WordTextArea(text, id="notes-text")
             with Horizontal():
                 yield Button("Save", variant="primary", id="save")
                 yield Button("Cancel", id="cancel")

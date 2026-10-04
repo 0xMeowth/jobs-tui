@@ -6,6 +6,7 @@ from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Static, TextArea
 
+from jobs_tui.app import WordTextArea
 from jobs_tui import application, jd
 from jobs_tui.paths import AppPaths, slug
 
@@ -25,7 +26,7 @@ class NewApplicationScreen(ModalScreen[AppPaths | None]):
             yield Input(placeholder="Company", id="company", suggester=SuggestFromList(application.company_names(self.app.jobs), case_sensitive=False))
             yield Input(placeholder="Role", id="role")
             yield Label("No URL? Paste the job description:")
-            yield TextArea(id="paste")
+            yield WordTextArea(id="paste")
             yield Static("", id="new-status")
             with Horizontal():
                 yield Button("Create", variant="primary", id="create")

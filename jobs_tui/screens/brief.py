@@ -6,6 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, TextArea
 
+from jobs_tui.app import WordTextArea
 from jobs_tui import application, bridge
 from jobs_tui.paths import AppPaths
 
@@ -70,7 +71,7 @@ class BriefScreen(ModalScreen[str | None]):
         pane = {v: label for label, v in self.app.pane_options}.get(pane_id, escape(pane_id)) if pane_id else None
         with Vertical(id="dialog"):
             yield Label("[b]Review brief[/b]  What should the agent focus on?")
-            yield TextArea(saved_brief(self.p), id="brief")
+            yield WordTextArea(saved_brief(self.p), id="brief")
             yield Label(f"Agent pane: {pane if pane else 'none. Cancel, press p to pair, then brief again.'}")
             with Horizontal():
                 yield Button("Start review", variant="primary", id="start", disabled=not pane)

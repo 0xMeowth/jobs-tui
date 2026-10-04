@@ -9,7 +9,7 @@ from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.events import Key
 from textual.widget import Widget
-from textual.widgets import Select, Static
+from textual.widgets import Select, Static, TextArea
 
 from jobs_tui import bridge
 from jobs_tui.bridge import Bridge, Pane, pane_label
@@ -52,6 +52,15 @@ def highlighted_value(select: Select) -> str | None:
         return None
     value = select._options[index][1]
     return None if value is Select.NULL else str(value)
+
+
+class WordTextArea(TextArea):
+    """TextArea with word jumps for macOS Option+arrow, which terminals send as alt or ESC-prefixed keys."""
+    BINDINGS = [
+        Binding("alt+left,alt+b", "cursor_word_left", "Word left", show=False),
+        Binding("alt+right,alt+f", "cursor_word_right", "Word right", show=False),
+        Binding("alt+backspace", "delete_word_left", "Delete word left", show=False),
+    ]
 
 
 class CommandBar(Widget):
