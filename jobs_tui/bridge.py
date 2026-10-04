@@ -6,7 +6,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-AGENTS = {"codex", "claude"}
 BUSY = "working"
 
 
@@ -48,7 +47,7 @@ def _workspace_labels() -> dict[str, str]:
 
 def list_agent_panes() -> list[Pane]:
     try:
-        raw = [d for d in json.loads(_run(["pane", "list"]))["result"]["panes"] if d.get("agent") in AGENTS]
+        raw = [d for d in json.loads(_run(["pane", "list"]))["result"]["panes"] if d.get("agent")]
         panes = [(_pane(d), d.get("workspace_id", "")) for d in raw]
     except Exception:
         return []

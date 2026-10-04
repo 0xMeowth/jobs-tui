@@ -9,6 +9,7 @@ LIST = {"result": {"panes": [
     {"pane_id": "w6:p1", "workspace_id": "w6", "agent": "claude", "agent_status": "working", "cwd": "/a", "terminal_title_stripped": "t1"},
     {"pane_id": "wK:p1", "workspace_id": "wK", "agent": "codex", "agent_status": "idle", "cwd": "/b", "terminal_title_stripped": "t2"},
     {"pane_id": "w1:p1", "cwd": "/c", "agent_status": "unknown", "terminal_title_stripped": "shell"},
+    {"pane_id": "w2:p1", "workspace_id": "w2", "agent": "gemini", "agent_status": "idle", "cwd": "/d", "terminal_title_stripped": "t3"},
 ]}}
 WORKSPACES = {"result": {"workspaces": [
     {"workspace_id": "w6", "label": "cv rewriting"},
@@ -43,7 +44,7 @@ def test_in_herdr(monkeypatch):
 
 def test_list_agent_panes_filters(fake_run):
     panes = bridge.list_agent_panes()
-    assert [(p.pane_id, p.agent, p.status) for p in panes] == [("w6:p1", "claude", "working"), ("wK:p1", "codex", "idle")]
+    assert [(p.pane_id, p.agent, p.status) for p in panes] == [("w6:p1", "claude", "working"), ("wK:p1", "codex", "idle"), ("w2:p1", "gemini", "idle")]
 
 
 def test_list_agent_panes_fills_workspace(fake_run):
@@ -60,7 +61,7 @@ def test_list_agent_panes_without_workspaces(fake_run, monkeypatch):
         return real(args)
     monkeypatch.setattr(bridge, "_run", _run)
     panes = bridge.list_agent_panes()
-    assert [p.pane_id for p in panes] == ["w6:p1", "wK:p1"]
+    assert [p.pane_id for p in panes] == ["w6:p1", "wK:p1", "w2:p1"]
     assert all(p.workspace == "" for p in panes)
 
 
