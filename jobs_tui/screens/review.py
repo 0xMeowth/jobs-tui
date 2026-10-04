@@ -13,7 +13,7 @@ from textual.message import Message
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, ListItem, ListView, Static, TextArea
 
-from jobs_tui import bridge, edits as E, guard, render
+from jobs_tui import application, bridge, edits as E, guard, render
 from jobs_tui.app import CommandBar
 from jobs_tui.model import Resume, apply_edit
 from jobs_tui.paths import AppPaths
@@ -141,7 +141,12 @@ class ReviewScreen(Screen):
         self._stop = threading.Event()
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · s send feedback · r render · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back", classes="help")
+        try:
+            meta = application.load(self.p)
+            title = f"[b]PROPOSED EDITS — {escape(meta.company)} · {escape(meta.role)}[/b]"
+        except (OSError, ValueError, TypeError):
+            title = "[b]PROPOSED EDITS[/b]"
+        yield Static(f"{title}  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · s send feedback · r render · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="edit-list")
             yield Static("", id="edit-detail")
