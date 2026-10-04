@@ -141,12 +141,12 @@ class ReviewScreen(Screen):
         self._stop = threading.Event()
 
     def compose(self) -> ComposeResult:
+        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · s send feedback · r render · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back", classes="help")
         try:
             meta = application.load(self.p)
-            title = f"[b]PROPOSED EDITS — {escape(meta.company)} · {escape(meta.role)}[/b]"
+            yield Static(f"[b]{escape(meta.company)} · {escape(meta.role)}[/b]", id="job-banner")
         except (OSError, ValueError, TypeError):
-            title = "[b]PROPOSED EDITS[/b]"
-        yield Static(f"{title}  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · s send feedback · r render · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back", classes="help")
+            pass
         with Horizontal(id="body"):
             yield ListView(id="edit-list")
             yield Static("", id="edit-detail")
