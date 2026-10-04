@@ -8,12 +8,29 @@ Terminal app for tailoring one resume per job application. You keep a master res
 - `typst`, `pdfinfo` and `pdftoppm` on your PATH. `brew install typst poppler`, or download the Typst release binary into `~/.local/bin`.
 - The Nunito font for the default template: `brew install --cask font-nunito`.
 - Optional: Google Chrome. Job pages that block plain HTTP fetches fall back to a browser.
-- herdr with a Codex or Claude Code pane. The app sends review prompts to that pane. Outside herdr you can still review and render, but not reach the agent.
+- [herdr](https://herdr.dev/), the terminal multiplexer the app talks to your coding agent through. See "Getting started with herdr" below.
 
 ## Install
 
     git clone <this repo> && cd jobs-tui
     uv sync
+
+## Getting started with herdr
+
+The app never calls a model itself. It types prompts into a Codex or Claude Code pane running next to it, and reads the files the agent writes. [herdr](https://herdr.dev/) ([source](https://github.com/herdrdev/herdr)) is the terminal multiplexer that makes this possible.
+
+1. Install it: `brew install herdr`, or one of the other options at [herdr.dev/docs/install](https://herdr.dev/docs/install/).
+2. Start `herdr` and create a workspace. Give it a label: the label is how the app names panes in its picker, as in `codex · jobs`.
+3. Split the workspace into two panes side by side. Start your agent in one, ideally in `$JOBS_DIR`, and run the app in the other:
+
+        ┌─ herdr workspace "jobs" ─────────────────────────────┐
+        │ jobs-tui                 │ codex or claude            │
+        │ (review, render, save)   │ (reads review-request.md,  │
+        │                          │  writes proposed-edits.json)│
+        └──────────────────────────────────────────────────────┘
+
+4. The app reaches the agent only when it is itself started inside herdr. Outside herdr you can still review, render and save, but not brief the agent or send feedback.
+5. Optional, for `ctx: N%` in the pane picker: in Codex run `/statusline` and enable context-used; in Claude Code use a status line that prints `ctx: N%`.
 
 ## First run
 
@@ -83,6 +100,7 @@ Open the app in one herdr pane and your agent in another. On launch the app asks
 - Save and finalize both refuse while the review is unfinished: every edit must be accepted or rejected, and a sent brief must have produced proposed-edits.json.
 - `,` opens settings on any screen. It turns the final check before saving on or off (on by default). Settings are stored in `$JOBS_DIR/settings.json`.
 - `x` on the list deletes a draft after confirmation. Submitted applications cannot be deleted.
+- The app keeps each application's `resume.yaml` read-only and only unlocks it around its own writes, so the agent cannot quietly edit it. The review screen shows CURRENT straight from the file and refuses edits whose claimed baseline no longer matches. If the file changes outside the app anyway, a warning points at the last app-written copy in `preview/resume.snapshot.yaml`; press `y` to adopt the outside change.
 
 ## Data folder layout
 
@@ -102,13 +120,24 @@ Open the app in one herdr pane and your agent in another. On launch the app asks
         notes.md                      your notes for this application (w)
         <name>.pdf                    copies saved with s on the render screen
         preview/resume.pdf            latest render, plus page images
+        preview/resume.snapshot.yaml  resume.yaml as the app last wrote it
 
 ## Other commands
 
     uv run jobs-tui jd <url>    # print a job description as markdown without creating an application
 
+## Current limitations
+
+- macOS only: PDFs open with the macOS `open` command, and the browser fallback for job pages expects Google Chrome in `/Applications`.
+- Only Codex and Claude Code are tested. Other agents herdr detects appear in the picker and will probably work, since the prompts are plain text, but they are untested.
+- The agent is not sandboxed. The read-only file, the live CURRENT display and the snapshot warning make a stray write fail or show up, but an agent that deliberately changes permissions can still edit files.
+- One resume template: a single-column, ATS-friendly layout, built and tested by one person and optimised for exactly two A4 pages. Other ATS-friendly formats exist; this is the one provided.
+- The final check covers job and project bullets only, in English, with a fixed British/American word list rather than a dictionary. Agent checks are not built yet.
+- Accepting a remove the agent proposed cannot be undone. The brief tells the agent not to propose removals.
+- Job import: LinkedIn postings use the public guest page. Pages behind a login cannot be fetched; paste the description instead.
+- If the last agent pane closes while the app is running, the pane picker keeps the old entries until it finds panes again.
+- Single user, local files only, no sync.
+
 ## Development
 
     uv run pytest
-
-Design notes are in `docs/superpowers/specs/2026-09-26-jobs-tui-design.md`.
