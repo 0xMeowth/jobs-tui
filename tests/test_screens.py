@@ -736,6 +736,7 @@ async def test_save_copies_pdf_under_chosen_name(jobs_dir, reviewable, decided, 
 
 async def test_save_name_falls_back_without_resume_name(jobs_dir, reviewable, decided, monkeypatch):
     from textual.widgets import Input
+    reviewable.resume_yaml.chmod(0o644)
     reviewable.resume_yaml.write_text("sections: []\n")
     reviewable.resume_pdf.write_bytes(b"%PDF")
     app = JobsApp(jobs_dir)
@@ -1107,6 +1108,7 @@ async def test_review_reports_permanently_malformed_edits(jobs_dir):
 
 
 async def test_review_accept_with_corrupt_yaml_keeps_running(jobs_dir, reviewable):
+    reviewable.resume_yaml.chmod(0o644)
     reviewable.resume_yaml.write_text("a: [1")
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -2775,3 +2777,57 @@ async def test_edit_with_missing_path_is_flagged(jobs_dir):
         await pilot.press("a")
         await pilot.pause(0.3)
     assert any("not in resume.yaml" in n for n in notes)
+
+
+async def test_accept_keeps_resume_locked_and_snapshotted(jobs_dir, reviewable, monkeypatch):
+    import os
+    from jobs_tui import guard
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+    assert not os.stat(reviewable.resume_yaml).st_mode & 0o222
+    assert guard.outside_change(reviewable) is False
+
+
+async def test_outside_change_warns_when_review_opens(jobs_dir, reviewable):
+    reviewable.resume_yaml.chmod(0o644)
+    reviewable.resume_yaml.write_text(reviewable.resume_yaml.read_text().replace("churn model", "chrn model"))
+    app = JobsApp(jobs_dir)
+    notes = record_notes(app)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+    assert any("changed outside the app" in n for n in notes)
+
+
+async def test_edit_yaml_unlocks_for_editor_and_adopts(jobs_dir, reviewable, monkeypatch):
+    import contextlib
+    import os
+    from jobs_tui import guard
+    from jobs_tui.screens import applications
+    monkeypatch.setenv("EDITOR", "true")
+    seen = {}
+
+    def fake_editor(args):
+        seen["writable"] = bool(os.stat(reviewable.resume_yaml).st_mode & 0o200)
+        reviewable.resume_yaml.write_text("name: Edited\nsections: []\n")
+
+    monkeypatch.setattr(applications.subprocess, "run", fake_editor)
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    monkeypatch.setattr(app, "suspend", contextlib.nullcontext)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+    assert seen["writable"] is True
+    assert not os.stat(reviewable.resume_yaml).st_mode & 0o222
+    assert guard.outside_change(reviewable) is False

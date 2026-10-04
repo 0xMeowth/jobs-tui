@@ -13,7 +13,7 @@ from textual.message import Message
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, ListItem, ListView, Static, TextArea
 
-from jobs_tui import bridge, edits as E, render
+from jobs_tui import bridge, edits as E, guard, render
 from jobs_tui.app import CommandBar
 from jobs_tui.model import Resume, apply_edit
 from jobs_tui.paths import AppPaths
@@ -150,6 +150,8 @@ class ReviewScreen(Screen):
 
     async def on_mount(self) -> None:
         self.app.current = self.p
+        if guard.outside_change(self.p):
+            self.app.notify(guard.OUTSIDE_CHANGE, severity="warning")
         await self.reload()
         self.watch_files()
 
@@ -335,6 +337,7 @@ class ReviewScreen(Screen):
             self.app.notify(escape(f"Cannot apply edit: {err}"), severity="error")
             return
         resume.save(self.p.resume_yaml)
+        guard.snapshot(self.p)
         self.set_status(e, "accepted", final=final if final is not None else e.proposed, before=before, applied_id=applied_id)
         if render:
             self.rerender()
@@ -427,6 +430,7 @@ class ReviewScreen(Screen):
             self.app.notify(f"resume.yaml changed since accept ({escape(E.label(e))}). Undo the later edit first, or press y on the list.", severity="warning")
             return
         resume.save(self.p.resume_yaml)
+        guard.snapshot(self.p)
         self.set_status(e, "pending", final=None, before=None, applied_id=None)
         self.rerender()
 

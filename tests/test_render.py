@@ -24,6 +24,7 @@ def test_render_produces_pdf_and_previews(jobs_dir, app):
 
 @needs_typst
 def test_render_error_surfaces_typst_message(jobs_dir, app):
+    app.resume_yaml.chmod(0o644)
     app.resume_yaml.write_text("name: X\n")  # no contact block -> typst error
     with pytest.raises(render.RenderError) as e:
         render.render(jobs_dir, app)
@@ -46,6 +47,7 @@ def test_starter_template_handles_projects_and_contact(jobs_dir, app):
     data["sections"].append({"id": "projects", "title": "Projects", "entries": [
         {"id": "bot", "org": "Recipe Bot", "url": "github.com/ada/recipe-bot", "bullets": [{"id": "bot.b1", "text": "Built a recipe bot"}]},
     ]})
+    app.resume_yaml.chmod(0o644)
     app.resume_yaml.write_text(yaml.safe_dump(data, allow_unicode=True))
     r = render.render(jobs_dir, app)
     text = subprocess.run(["pdftotext", str(r.pdf), "-"], capture_output=True, text=True, check=True).stdout

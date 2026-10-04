@@ -12,7 +12,7 @@ from textual.widgets import Label, ListItem, ListView, Static
 
 from textual import work
 
-from jobs_tui import application, bridge, render
+from jobs_tui import application, bridge, guard, render
 from jobs_tui.app import CommandBar
 from jobs_tui.paths import AppPaths, list_applications
 
@@ -184,12 +184,16 @@ class ApplicationsScreen(Screen):
             return
         editor = os.environ.get("EDITOR", "vi")
         p = self.app.current
+        guard.unlock(p)
         try:
             with self.app.suspend():
                 subprocess.run(shlex.split(editor) + [str(p.resume_yaml)])
         except OSError as err:
             self.app.notify(escape(f"Cannot run editor {editor!r}: {err}"), severity="error")
             return
+        finally:
+            guard.lock(p)
+            guard.snapshot(p)
         self.rerender(p)
 
     @work(thread=True, exclusive=True, group="render")

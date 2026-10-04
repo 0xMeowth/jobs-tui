@@ -10,7 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, ListItem, ListView, Static
 
-from jobs_tui import checks, edits as E, render, settings
+from jobs_tui import checks, edits as E, guard, render, settings
 from jobs_tui.app import CommandBar
 from jobs_tui.model import Resume
 from jobs_tui.paths import AppPaths
@@ -125,6 +125,8 @@ class RenderScreen(Screen):
 
     def action_save(self) -> None:
         from jobs_tui.screens.finalize import check_pdf
+        if guard.outside_change(self.p):
+            self.app.notify(guard.OUTSIDE_CHANGE, severity="warning")
         if not check_pdf(self.p)[0] or not settings.load(self.app.jobs).local_checks:
             self.open_save()
             return
@@ -236,6 +238,7 @@ class RenderScreen(Screen):
             return
         resume.set(path, text)
         resume.save(self.p.resume_yaml)
+        guard.snapshot(self.p)
         st = checks.load_state(self.p.final_check)
         st["applied"].append({"bullet_id": item["bullet_id"], "before": item["current"], "after": text, "rules": item["rules"]})
         checks.save_state(self.p.final_check, st)
@@ -279,6 +282,7 @@ class RenderScreen(Screen):
                 return
             resume.set(path, item["before"])
             resume.save(self.p.resume_yaml)
+            guard.snapshot(self.p)
             st["applied"].remove(item)
         checks.save_state(self.p.final_check, st)
         self.show_findings()

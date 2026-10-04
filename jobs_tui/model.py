@@ -21,7 +21,10 @@ class Resume:
         return cls(yaml.safe_load(path.read_text()))
 
     def save(self, path: Path) -> None:
+        if path.exists():
+            path.chmod(0o644)
         path.write_text(yaml.safe_dump(self.data, allow_unicode=True, sort_keys=False, width=1000))
+        path.chmod(0o444)
 
     def _reindex(self) -> None:
         self._index: dict[str, dict] = {}

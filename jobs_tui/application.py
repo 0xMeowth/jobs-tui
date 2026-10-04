@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
+from jobs_tui import guard
 from jobs_tui.paths import AppPaths, app_paths, compact, list_applications, master_yaml
 
 
@@ -59,6 +60,8 @@ def create(jobs: Path, company: str, role: str, url: str | None) -> AppPaths:
     p.preview_dir.mkdir()
     try:
         shutil.copy(master_yaml(jobs), p.resume_yaml)
+        guard.lock(p)
+        guard.snapshot(p)
         save(p, Application(company=company, role=role, url=url or None, created=date.today().isoformat()))
     except OSError:
         shutil.rmtree(p.root)
