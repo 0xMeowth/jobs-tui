@@ -2707,3 +2707,19 @@ async def test_c_in_bar_list_pairs_and_clears_but_comment_still_works(jobs_dir, 
         await pilot.press("c")
         await pilot.pause()
         assert app.screen.query_one("#comment", TextArea)
+
+
+async def test_long_dialog_labels_wrap(jobs_dir, two_apps, monkeypatch):
+    from textual.widgets import Label
+    two_panes(monkeypatch, [])
+    monkeypatch.setattr(JobsApp, "pair_on_launch", True)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(160, 40)) as pilot:
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if app.screen.__class__.__name__ == "PairScreen":
+                break
+        await pilot.pause()
+        label = app.screen.query("#dialog Label").first(Label)
+        dialog = app.screen.query_one("#dialog")
+        assert label.region.right <= dialog.region.right and label.region.height >= 2
