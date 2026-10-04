@@ -158,3 +158,20 @@ def test_feedback_prompt_is_deterministic_per_action():
     assert '"rejected"' not in f
     assert "Leave every edit not listed" in f
     assert "Do not ask me questions" in f and "Do not edit resume.yaml" in f
+
+
+def test_clear_context_only_when_not_working(monkeypatch):
+    sent = []
+    monkeypatch.setattr(bridge, "run_in_pane", lambda pid, text: sent.append((pid, text)))
+    pane = bridge.Pane("wK:p1", "codex", "idle", "/j", "t", "jobs")
+    monkeypatch.setattr(bridge, "get_pane", lambda pid: pane)
+    assert bridge.clear_context("wK:p1") == "cleared" and sent == [("wK:p1", "/clear")]
+    pane.status = "working"
+    assert bridge.clear_context("wK:p1") == "busy" and len(sent) == 1
+    monkeypatch.setattr(bridge, "get_pane", lambda pid: None)
+    assert bridge.clear_context("wK:p1") == "unpaired"
+    def boom(pid, text):
+        raise RuntimeError("gone")
+    monkeypatch.setattr(bridge, "get_pane", lambda pid: bridge.Pane("wK:p1", "codex", "idle", "/j", "t", "jobs"))
+    monkeypatch.setattr(bridge, "run_in_pane", boom)
+    assert bridge.clear_context("wK:p1") == "failed"

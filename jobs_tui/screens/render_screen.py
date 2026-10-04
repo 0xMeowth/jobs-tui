@@ -15,8 +15,8 @@ from jobs_tui.app import CommandBar
 from jobs_tui.model import Resume
 from jobs_tui.paths import AppPaths
 
-HELP = "[b]RENDER[/b]  o open PDF · s save PDF · S save without check · w notes · f finalize · p pair · , settings · Esc back"
-CHECK_HELP = "[b]RENDER[/b]  a fix · x dismiss · e edit · u undo · o open PDF · s save PDF · S save without check · w notes · f finalize · p pair · , settings · Esc back"
+HELP = "[b]RENDER[/b]  o open PDF · s save PDF · S save without check · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back"
+CHECK_HELP = "[b]RENDER[/b]  a fix · x dismiss · e edit · u undo · o open PDF · s save PDF · S save without check · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back"
 GLYPH = {"open": "○", "fixed": "●", "dismissed": "×"}
 
 

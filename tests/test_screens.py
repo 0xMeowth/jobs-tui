@@ -2654,3 +2654,56 @@ async def test_pair_dialog_shows_context(jobs_dir, two_apps, monkeypatch):
             if app.screen.__class__.__name__ == "PairScreen" and "ctx" in str(app.screen.query_one("#pair-select", Select)._options[-1][0]):
                 break
         assert [str(label) for label, _ in app.screen.query_one("#pair-select", Select)._options[1:]] == ["codex · jobs · ctx: 12%", "claude · cv rewriting · ctx: 12%"]
+
+
+async def test_c_in_pair_dialog_pairs_and_clears(jobs_dir, two_apps, monkeypatch):
+    from textual.widgets import Select
+    from jobs_tui import bridge as bridge_mod
+    two_panes(monkeypatch, [])
+    cleared = []
+    monkeypatch.setattr(bridge_mod, "clear_context", lambda pid: cleared.append(pid) or "cleared")
+    monkeypatch.setattr(JobsApp, "pair_on_launch", True)
+    app = JobsApp(jobs_dir)
+    notes = record_notes(app)
+    async with app.run_test(size=(160, 40)) as pilot:
+        for _ in range(30):
+            await pilot.pause(0.05)
+            if app.screen.__class__.__name__ == "PairScreen" and app.screen.query_one("#pair-select", Select).expanded:
+                break
+        await pilot.press("down", "c")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert app.bridge.pane_id == "wK:p1" and cleared == ["wK:p1"]
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+    assert any("cleared" in n for n in notes)
+
+
+async def test_c_in_bar_list_pairs_and_clears_but_comment_still_works(jobs_dir, reviewable, monkeypatch):
+    from textual.widgets import Select, TextArea
+    from jobs_tui import bridge as bridge_mod
+    two_panes(monkeypatch, [])
+    cleared = []
+    monkeypatch.setattr(bridge_mod, "clear_context", lambda pid: cleared.append(pid) or "busy")
+    app = JobsApp(jobs_dir)
+    notes = record_notes(app)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        select = app.screen.query_one("#agent-pane", Select)
+        await wait_for_options(pilot, select, 2)
+        await pilot.press("p")
+        for _ in range(40):
+            await pilot.pause(0.05)
+            if select.expanded:
+                break
+        await pilot.press("down", "c")
+        for _ in range(40):
+            await pilot.pause(0.05)
+            if any("not cleared" in n for n in notes):
+                break
+        assert app.bridge.pane_id == "wK:p1" and cleared == ["wK:p1"] and not select.expanded
+        assert any("not cleared" in n for n in notes)
+        await pilot.press("c")
+        await pilot.pause()
+        assert app.screen.query_one("#comment", TextArea)

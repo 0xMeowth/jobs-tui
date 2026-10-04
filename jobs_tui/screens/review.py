@@ -141,7 +141,7 @@ class ReviewScreen(Screen):
         self._stop = threading.Event()
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · w notes · f finalize · p pair · , settings · Esc back", classes="help")
+        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="edit-list")
             yield Static("", id="edit-detail")

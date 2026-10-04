@@ -1,5 +1,6 @@
 from rich.markup import escape
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.events import Key
 from textual.screen import ModalScreen
@@ -11,13 +12,13 @@ NO_PANES = "No agent panes found. Start codex or claude in a herdr pane, then pr
 
 
 class PairScreen(ModalScreen[bool]):
-    BINDINGS = [("escape", "cancel", "Cancel")]
+    BINDINGS = [("escape", "cancel", "Cancel"), Binding("c", "pair_clear", "Pair and clear context", priority=True)]
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label("[b]Pair an agent pane[/b]  Pick the pane; Enter pairs it. Review prompts go to this pane.")
+            yield Label("[b]Pair an agent pane[/b]  Enter pairs the pane · c pairs it and clears its context. Review prompts go to this pane.")
             yield Static("Looking for agent panes…", id="pair-status")
-            yield Select(self.app.pane_options, allow_blank=True, prompt="Pick an agent pane", id="pair-select")
+            yield Select(self.app.pane_options, allow_blank=True, prompt="Pick an agent pane", type_to_search=False, id="pair-select")
             with Horizontal():
                 yield Button("Cancel", id="cancel")
 
@@ -52,6 +53,18 @@ class PairScreen(ModalScreen[bool]):
         select.display = True
         select.focus()
         select.action_show_overlay()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "pair_clear":
+            return self.query_one("#pair-select", Select).expanded
+        return True
+
+    def action_pair_clear(self) -> None:
+        from jobs_tui.app import highlighted_value
+        value = highlighted_value(self.query_one("#pair-select", Select))
+        if value is not None:
+            self.app.pair_and_clear(value)
+            self.dismiss(True)
 
     def on_key(self, event: Key) -> None:
         if event.key == "escape" and self.query_one("#pair-select", Select).has_focus_within:

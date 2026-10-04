@@ -45,12 +45,41 @@ def check_label(app: "JobsApp") -> str:
         return ""
 
 
+def highlighted_value(select: Select) -> str | None:
+    from textual.widgets._select import SelectOverlay
+    index = select.query_one(SelectOverlay).highlighted
+    if index is None or index >= len(select._options):
+        return None
+    value = select._options[index][1]
+    return None if value is Select.NULL else str(value)
+
+
 class CommandBar(Widget):
+    BINDINGS = [Binding("c", "pair_clear", "Pair and clear context", priority=True)]
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "pair_clear":
+            return bool(self.query("#agent-pane")) and self.query_one("#agent-pane", Select).expanded
+        return True
+
+    def action_pair_clear(self) -> None:
+        select = self.query_one("#agent-pane", Select)
+        value = highlighted_value(select)
+        if value is None:
+            return
+        app: JobsApp = self.app  # type: ignore[assignment]
+        select.expanded = False
+        with select.prevent(Select.Changed):
+            select.value = value
+        app.pair_and_clear(value)
+        self.refresh_status()
+        app.leave_bar()
+
     def compose(self) -> ComposeResult:
         app: JobsApp = self.app  # type: ignore[assignment]
         options = app.pane_options
         value = app.bridge.pane_id if app.bridge.pane_id in [v for _, v in options] else Select.NULL
-        yield Select(options, value=value, allow_blank=True, prompt=picker_prompt(options), id="agent-pane")
+        yield Select(options, value=value, allow_blank=True, prompt=picker_prompt(options), type_to_search=False, id="agent-pane")
         yield Static("", id="agent-state")
 
     def on_mount(self) -> None:
@@ -218,6 +247,19 @@ class JobsApp(App):
     def open_notes(self, p: AppPaths, done: Callable[[bool], None] | None = None) -> None:
         from jobs_tui.screens.notes import NotesScreen
         self.push_screen(NotesScreen(p), done)
+
+    def pair_and_clear(self, pane_id: str) -> None:
+        self.bridge.pane_id = pane_id
+        self.run_worker(partial(self._clear, pane_id), thread=True, group="clear")
+
+    def _clear(self, pane_id: str) -> None:
+        outcome = bridge.clear_context(pane_id)
+        messages = {
+            "cleared": ("Paired and cleared the agent's context", "information"),
+            "busy": ("Paired. The agent is working, so its context was not cleared.", "warning"),
+        }
+        text, severity = messages.get(outcome, ("Paired, but clearing the agent's context failed.", "error"))
+        self.call_from_thread(self.notify, text, severity=severity)
 
     def action_settings(self) -> None:
         from jobs_tui.screens.settings import SettingsScreen

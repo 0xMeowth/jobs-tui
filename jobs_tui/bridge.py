@@ -107,6 +107,19 @@ def feedback_prompt(root: Path, round: int) -> str:
     )
 
 
+def clear_context(pane_id: str) -> str:
+    pane = get_pane(pane_id)
+    if pane is None:
+        return "unpaired"
+    if pane.status == BUSY:
+        return "busy"
+    try:
+        run_in_pane(pane_id, "/clear")
+    except (RuntimeError, OSError):
+        return "failed"
+    return "cleared"
+
+
 class Bridge:
     def __init__(self, pane_id: str | None = None):
         self.pane_id = pane_id
