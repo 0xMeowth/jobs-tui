@@ -125,7 +125,6 @@ class ReviewScreen(Screen):
         Binding("v", "accept_previous", "Accept previous"),
         Binding("d", "toggle_diff", "Diff"),
         Binding("j", "next", "Next"), Binding("k", "prev", "Prev"),
-        Binding("A", "accept_all", "Accept all pending"),
         Binding("s", "send_feedback", "Send feedback"),
         Binding("r", "render", "Render"),
         Binding("w", "notes", "Notes"),
@@ -142,7 +141,7 @@ class ReviewScreen(Screen):
         self._stop = threading.Event()
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · A accept all open · s send feedback · r render · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back", classes="help")
+        yield Static("[b]PROPOSED EDITS[/b]  a accept · x reject · e edit · c comment · u undo · v accept previous · d diff · s send feedback · r render · w notes · f finalize · p pair (in list: c clears context) · , settings · Esc back", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="edit-list")
             yield Static("", id="edit-detail")
@@ -319,7 +318,7 @@ class ReviewScreen(Screen):
             return True
         return False
 
-    def apply(self, e: E.Edit, final: str | None, render: bool = True) -> None:
+    def apply(self, e: E.Edit, final: str | None) -> None:
         if E.status_of(e.id, self.decisions) == "accepted":
             self.app.notify("Already accepted")
             return
@@ -339,8 +338,7 @@ class ReviewScreen(Screen):
         resume.save(self.p.resume_yaml)
         guard.snapshot(self.p)
         self.set_status(e, "accepted", final=final if final is not None else e.proposed, before=before, applied_id=applied_id)
-        if render:
-            self.rerender()
+        self.rerender()
 
     @work(thread=True, exclusive=True, group="render")
     def rerender(self) -> None:
@@ -459,11 +457,6 @@ class ReviewScreen(Screen):
         lv = self.query_one("#edit-list", ListView)
         if self.edits and lv.index:
             lv.index -= 1
-
-    def action_accept_all(self) -> None:
-        for e in [e for e in self.edits if E.state_of(e.id, self.decisions, e.proposed) == "open"]:
-            self.apply(e, None, render=False)
-        self.rerender()
 
     def action_send_feedback(self) -> None:
         if not self.app.require_pane():

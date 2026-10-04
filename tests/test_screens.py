@@ -1562,7 +1562,9 @@ async def test_review_shows_next_step_when_all_decided(jobs_dir, reviewable, mon
         detail = app.screen.query_one("#edit-detail", Static)
         plain = detail.render().plain
         assert "Status: pending" not in plain and "All decided" not in plain
-        await pilot.press("A")
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        await pilot.press("a")
         await pilot.pause(0.3)
         plain = detail.render().plain
         assert "All decided" in plain and "r render" in plain
