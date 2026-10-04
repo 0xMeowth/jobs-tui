@@ -84,7 +84,7 @@ class ApplicationsScreen(Screen):
             f"Submitted   {meta.submitted_date or 'no'}",
             f"URL         {escape(meta.url or '-')}", "",
             f"JD          {'imported' if s['jd'] else 'missing'}",
-            f"Edits       {s['edits_pending']} pending of {s['edits_total']}",
+            "Edits       proposed-edits.json unreadable" if s["edits_error"] else f"Edits       {s['edits_pending']} pending of {s['edits_total']}",
             f"Pages       {s['pages'] if s['pages'] is not None else 'not rendered'}",
         ]
         if p.notes_md.exists():

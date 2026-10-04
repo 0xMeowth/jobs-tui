@@ -68,6 +68,7 @@ def create(jobs: Path, company: str, role: str, url: str | None) -> AppPaths:
 
 def summary(p: AppPaths) -> dict:
     total = pending = 0
+    error = False
     if p.proposed_edits.exists():
         try:
             from jobs_tui import edits as edits_mod  # local import: edits.py is added in Task 4
@@ -77,6 +78,7 @@ def summary(p: AppPaths) -> dict:
             pending = edits_mod.counts(es, decisions)["pending"]
         except Exception:
             total = pending = 0
+            error = True
     pages = None
     if p.resume_pdf.exists():
         try:
@@ -87,6 +89,7 @@ def summary(p: AppPaths) -> dict:
     return {
         "jd": p.jd_md.exists(),
         "edits_total": total,
+        "edits_error": error,
         "edits_pending": pending,
         "pages": pages,
         "submitted": load(p).submitted_date,

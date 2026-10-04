@@ -43,11 +43,20 @@ def test_load_ignores_removed_fields(jobs_dir):
     assert application.load(p).company == "A"
 
 
+def test_summary_reports_unreadable_edits(jobs_dir):
+    paths.master_yaml(jobs_dir).write_text("name: T\n")
+    p = application.create(jobs_dir, "A", "B", None)
+    p.proposed_edits.write_text("{broken")
+    assert application.summary(p)["edits_error"] is True
+    p.proposed_edits.write_text('{"edits": []}')
+    assert application.summary(p)["edits_error"] is False
+
+
 def test_summary_from_files(jobs_dir):
     paths.master_yaml(jobs_dir).write_text("name: T\n")
     p = application.create(jobs_dir, "A", "B", None)
     s = application.summary(p)
-    assert s == {"jd": False, "edits_total": 0, "edits_pending": 0, "pages": None, "submitted": None}
+    assert s == {"jd": False, "edits_total": 0, "edits_pending": 0, "edits_error": False, "pages": None, "submitted": None}
     p.jd_md.write_text("# x")
     assert application.summary(p)["jd"] is True
 
