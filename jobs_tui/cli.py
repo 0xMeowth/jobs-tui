@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "jd":
         return cmd_jd(args.url)
     if not master_yaml(jobs).exists() or not template_typ(jobs).exists():
-        print(f"Templates missing in {jobs}. Run: jobs-tui init")
+        print(f"No master resume template in {jobs}. Run: jobs-tui init to create one, then fill in templates/resume-master.yaml.")
         return 1
     from jobs_tui.app import JobsApp
     JobsApp(jobs).run()

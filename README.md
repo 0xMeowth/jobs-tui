@@ -44,7 +44,7 @@ The app never calls a model itself. It types prompts into a Codex or Claude Code
 
    This creates `templates/resume.typ` and `templates/resume-master.yaml` in `JOBS_DIR`, plus an empty `companies/` folder.
 
-3. Put your own resume into `templates/resume-master.yaml`. The starter is a skeleton with bracketed slots. Keep the shape:
+3. Put your own resume into `templates/resume-master.yaml`. The starter is a skeleton with bracketed slots. Recommended: paste the skeleton and your current resume (exported text or PDF) into your agent and ask it to transcribe the resume into the skeleton's shape, then proofread the result — it is transcription, not writing, so a single read-through catches any slip. Filling the slots by hand works too. Either way, keep the shape:
 
         name: <your name>
         contact: {location: "...", phone: "...", email: "...", linkedin: "..."}
