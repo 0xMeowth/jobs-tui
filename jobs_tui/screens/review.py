@@ -25,12 +25,13 @@ class FolderChanged(Message):
         self.names = names
 
 
-def edit_diff(e: "E.Edit", proposed: str | None = None) -> str:
+def edit_diff(e: "E.Edit", proposed: str | None = None, current: str | None = None) -> str:
     proposed = e.proposed if proposed is None else proposed
+    current = e.current if current is None else current
     if e.op == "replace":
-        return word_diff(e.current, proposed)
+        return word_diff(current, proposed)
     if e.op == "remove":
-        return "[red strike]" + escape(e.current) + "[/]"
+        return "[red strike]" + escape(current) + "[/]"
     return "[green]" + escape(proposed) + "[/]"
 
 
@@ -218,6 +219,30 @@ class ReviewScreen(Screen):
             return d.final, f"ACCEPTED (r{E.round_of_id(e.revises)})"
         return d.final, "YOUR EDIT"
 
+    def baseline_of(self, e: E.Edit) -> tuple[str, str | None]:
+        """What the bullet says now, and why the edit cannot be applied, if it cannot."""
+        d = self.decisions.get(e.id, E.Decision())
+        if d.status == "accepted" and d.before is not None:
+            return d.before, None
+        if e.op != "replace" or d.status == "accepted":
+            return e.current, None
+        try:
+            live = Resume.load(self.p.resume_yaml).get(e.path)
+        except (yaml.YAMLError, OSError):
+            return e.current, None  # yaml problems are reported by the accept flow
+        except KeyError:
+            return e.current, f"{escape(E.label(e))} is not in resume.yaml. Reject (x), or fix resume.yaml (y on the list)."
+        if live != e.current:
+            return live, "The agent's baseline doesn't match resume.yaml. Reject (x), ask for a rework (c), or fix resume.yaml (y on the list)."
+        return live, None
+
+    def refuse_if_mismatched(self, e: E.Edit) -> bool:
+        problem = self.baseline_of(e)[1]
+        if problem:
+            self.app.notify(problem, severity="warning")
+            return True
+        return False
+
     def previous_text(self, e: E.Edit) -> str | None:
         if not e.revises:
             return None
@@ -227,7 +252,8 @@ class ReviewScreen(Screen):
         d = self.decisions.get(e.id, E.Decision())
         c = E.counts(self.edits, self.decisions)
         shown, title = self.shown_text(e)
-        body = edit_diff(e, shown) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(e.current)}\n\n[b]{title}[/b]\n{escape(shown)}"
+        current, problem = self.baseline_of(e)
+        body = edit_diff(e, shown, current) if self.show_diff else f"[dim]CURRENT[/dim]\n{escape(current)}\n\n[b]{title}[/b]\n{escape(shown)}"
         state = E.state_of(e.id, self.decisions, e.proposed)
         head = (f"[b]{escape(E.label(e))}[/b]  {escape(e.op)}" + (f"  · r{self.round_of(e)}" if e.revises else "")
                 + f"  · {c['open']} open, {c['rework']} rework" + (f", {c['sent']} sent" if c['sent'] else "")
@@ -237,6 +263,8 @@ class ReviewScreen(Screen):
         elif c["rework"]:
             head += f" · s send {c['rework']} rework"
         status = []
+        if problem:
+            status.append(f"[red]{problem}[/red]")
         if state == "rework":
             status.append(f"Rework, sent with s: {escape(d.comment)}")
         elif state == "sent":
@@ -296,6 +324,9 @@ class ReviewScreen(Screen):
         try:
             resume = Resume.load(self.p.resume_yaml)
             before = resume.get(e.path) if e.op == "replace" else None
+            if e.op == "replace" and before != e.current:
+                self.app.notify("The agent's baseline doesn't match resume.yaml. Reject (x), or fix resume.yaml (y on the list).", severity="warning")
+                return
             applied_id = apply_edit(resume, e.as_dict(), final)
         except (yaml.YAMLError, OSError) as err:
             self.app.notify(escape(f"Cannot read resume.yaml: {err}"), severity="error")
@@ -321,7 +352,7 @@ class ReviewScreen(Screen):
     # ----- actions -----
     def action_accept(self) -> None:
         e = self.current()
-        if not e or self.refuse_if_sent(e):
+        if not e or self.refuse_if_sent(e) or self.refuse_if_mismatched(e):
             return
         self.apply(e, None)
         self.action_next()
@@ -344,7 +375,7 @@ class ReviewScreen(Screen):
 
     def action_edit(self) -> None:
         e = self.current()
-        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e):
+        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e) or self.refuse_if_mismatched(e):
             return
         if e.op == "remove":
             self.app.notify("Remove edits can't be reworded")
@@ -401,7 +432,7 @@ class ReviewScreen(Screen):
 
     def action_accept_previous(self) -> None:
         e = self.current()
-        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e):
+        if not e or self.refuse_if_accepted(e) or self.refuse_if_sent(e) or self.refuse_if_mismatched(e):
             return
         prev = self.previous_text(e)
         if prev is None:

@@ -456,8 +456,8 @@ async def test_pairing_survives_screen_change(jobs_dir, reviewable, monkeypatch)
 
 
 SAMPLE_EDITS = {"edits": [
-    {"id": "e1", "path": "acme.b1.text", "current": "Built a churn model", "proposed": "Built and deployed a churn model", "reason": "deployment"},
-    {"id": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting", "proposed": "Automated reporting", "reason": "shorter"},
+    {"id": "e1", "path": "acme.b1.text", "current": "Built a churn model on 2M customer records that cut voluntary churn by 8% in two quarters", "proposed": "Built and deployed a churn model", "reason": "deployment"},
+    {"id": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting in SQL and Power BI, saving the team 6 hours a week", "proposed": "Automated reporting", "reason": "shorter"},
 ]}
 
 
@@ -2120,8 +2120,8 @@ async def test_undo_withdraws_sent_edit(jobs_dir, reviewable, monkeypatch):
 
 
 REVISED_EDITS = {"edits": [
-    {"id": "e1-r1", "revises": "e1", "path": "acme.b1.text", "current": "Built a churn model", "proposed": "Built a churn model that cut churn 8%", "reason": "kept figure"},
-    {"id": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting", "proposed": "Automated reporting", "reason": "shorter"},
+    {"id": "e1-r1", "revises": "e1", "path": "acme.b1.text", "current": "Built a churn model on 2M customer records that cut voluntary churn by 8% in two quarters", "proposed": "Built a churn model that cut churn 8%", "reason": "kept figure"},
+    {"id": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting in SQL and Power BI, saving the team 6 hours a week", "proposed": "Automated reporting", "reason": "shorter"},
 ]}
 
 
@@ -2197,8 +2197,8 @@ async def test_previous_label_uses_round_of_revised_id(jobs_dir, reviewable):
         "e2": Decision("pending", comment="keep weekly", sent_proposed="Automated reporting"),
     }, request={"round": 2, "items": []})
     reviewable.proposed_edits.write_text(json.dumps({"edits": [
-        {"id": "e1-r3", "revises": "e1-r1", "path": "acme.b1.text", "current": "Built a churn model", "proposed": "Built churn model", "reason": "r"},
-        {"id": "e2-r3", "revises": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting", "proposed": "Automated weekly reports", "reason": "r"},
+        {"id": "e1-r3", "revises": "e1-r1", "path": "acme.b1.text", "current": "Built a churn model on 2M customer records that cut voluntary churn by 8% in two quarters", "proposed": "Built churn model", "reason": "r"},
+        {"id": "e2-r3", "revises": "e2", "path": "acme.b2.text", "current": "Automated weekly reporting in SQL and Power BI, saving the team 6 hours a week", "proposed": "Automated weekly reports", "reason": "r"},
     ]}))
     app = JobsApp(jobs_dir)
     async with app.run_test(size=(120, 40)) as pilot:
@@ -2723,3 +2723,55 @@ async def test_long_dialog_labels_wrap(jobs_dir, two_apps, monkeypatch):
         label = app.screen.query("#dialog Label").first(Label)
         dialog = app.screen.query_one("#dialog")
         assert label.region.right <= dialog.region.right and label.region.height >= 2
+
+
+async def test_review_current_comes_from_disk_and_mismatch_blocks(jobs_dir, reviewable):
+    from textual.widgets import Static
+    from jobs_tui.edits import load_feedback
+    from jobs_tui.model import Resume
+    set_bullet(reviewable, "acme.b1.text", "Rewritten by hand outside the app")
+    app = JobsApp(jobs_dir)
+    notes = record_notes(app)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        detail = app.screen.query_one("#edit-detail", Static).render().plain
+        assert "Rewritten by hand outside the app" in detail
+        assert "doesn't match resume.yaml" in detail
+        await pilot.press("a")
+        await pilot.pause(0.3)
+    assert any("doesn't match resume.yaml" in n for n in notes)
+    assert "e1" not in load_feedback(reviewable.review_feedback) or load_feedback(reviewable.review_feedback)["e1"].status == "pending"
+    assert Resume.load(reviewable.resume_yaml).get("acme.b1.text") == "Rewritten by hand outside the app"
+
+
+async def test_accepted_edit_keeps_original_baseline(jobs_dir, reviewable, monkeypatch):
+    from textual.widgets import Static
+    fresh_render(monkeypatch)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a", "k")
+        await pilot.pause(0.3)
+        detail = app.screen.query_one("#edit-detail", Static).render().plain
+        assert "on 2M customer records" in detail and "doesn't match" not in detail
+
+
+async def test_edit_with_missing_path_is_flagged(jobs_dir):
+    import json as json_mod
+    from textual.widgets import Static
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json_mod.dumps({"edits": [{"id": "g1", "path": "ghost.b9.text", "current": "x", "proposed": "y", "reason": "r"}]}))
+    app = JobsApp(jobs_dir)
+    notes = record_notes(app)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "not in resume.yaml" in app.screen.query_one("#edit-detail", Static).render().plain
+        await pilot.press("a")
+        await pilot.pause(0.3)
+    assert any("not in resume.yaml" in n for n in notes)
