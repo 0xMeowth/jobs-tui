@@ -1,5 +1,6 @@
 import re
 import subprocess
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -46,12 +47,16 @@ def compile(jobs: Path, p: AppPaths) -> Path:
 def previews(pdf: Path, out_dir: Path) -> list[Path]:
     out_dir.mkdir(exist_ok=True)
     for old in out_dir.glob("page-*.png"):
-        old.unlink()
+        old.unlink(missing_ok=True)
     _run_tool(["pdftoppm", "-r", "110", "-png", str(pdf), str(out_dir / "page")])
     return sorted(out_dir.glob("page-*.png"), key=lambda f: int(f.stem.split("-")[1]))
 
 
+_render_lock = threading.Lock()  # screens render from separate workers; serialize writes to the preview dir
+
+
 def render(jobs: Path, p: AppPaths) -> RenderResult:
-    pdf = compile(jobs, p)
-    pages = page_count(pdf)
-    return RenderResult(pdf=pdf, pages=pages, previews=previews(pdf, p.preview_dir))
+    with _render_lock:
+        pdf = compile(jobs, p)
+        pages = page_count(pdf)
+        return RenderResult(pdf=pdf, pages=pages, previews=previews(pdf, p.preview_dir))
