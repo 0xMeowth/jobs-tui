@@ -134,7 +134,7 @@ Open the app in one herdr pane and your agent in another. On launch the app asks
 - One resume template: a single-column, ATS-friendly layout, built and tested by one person and optimised for exactly two A4 pages. Other ATS-friendly formats exist; this is the one provided.
 - The final check covers job and project bullets only, in English, with a fixed British/American word list rather than a dictionary. Agent checks are not built yet.
 - Accepting a remove the agent proposed cannot be undone. The brief tells the agent not to propose removals.
-- Job import: LinkedIn postings use the public guest page. Pages behind a login cannot be fetched; paste the description instead.
+- Job import from a URL only works reliably for LinkedIn postings, which use the public guest page. Other sites get a best-effort HTTP fetch with a headless Chrome fallback, but login walls and bot protection usually defeat it; paste the description instead.
 - If the last agent pane closes while the app is running, the pane picker keeps the old entries until it finds panes again.
 - Single user, local files only, no sync.
 
