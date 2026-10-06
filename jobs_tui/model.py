@@ -107,7 +107,10 @@ def apply_edit(resume: Resume, edit: dict, final: str | None) -> str | None:
     if op == "add":
         return resume.add_bullet(edit["entry"], text, edit.get("after"))
     if op == "remove":
-        node_id = edit["path"] if resume.has(edit["path"]) else split_path(edit["path"])[0]
+        node_id = edit["path"]
+        if not resume.has(node_id):
+            resume.get(node_id)
+            node_id = split_path(node_id)[0]
         resume.remove(node_id)
         return node_id
     raise ValueError(f"unknown op {op!r}")

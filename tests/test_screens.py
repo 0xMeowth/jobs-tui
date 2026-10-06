@@ -1964,6 +1964,36 @@ async def test_undo_accepted_remove_refuses(jobs_dir, monkeypatch):
     assert any("Can't undo a remove" in n for n in notices)
 
 
+async def test_review_duplicate_remove_preserves_entry(jobs_dir, monkeypatch):
+    from jobs_tui import render
+    from jobs_tui.edits import load_feedback, status_of
+    from jobs_tui.model import Resume
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    p = application.create(jobs_dir, "Acme", "Analyst", None)
+    p.proposed_edits.write_text(json.dumps({"edits": [
+        {"id": edit_id, "op": "remove", "path": "acme.b2", "current": "Automated weekly reporting", "reason": "cut"}
+        for edit_id in ("d1", "d2")
+    ]}))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("a")
+        await pilot.pause(0.3)
+        assert not Resume.load(p.resume_yaml).has("acme.b2")
+        after_first = p.resume_yaml.read_bytes()
+
+        await pilot.press("a")
+        await pilot.pause(0.3)
+
+        assert p.resume_yaml.read_bytes() == after_first
+        assert [b["id"] for b in Resume.load(p.resume_yaml).node("acme")["bullets"]] == ["acme.b1"]
+        decisions = load_feedback(p.review_feedback)
+        assert status_of("d1", decisions) == "accepted"
+        assert status_of("d2", decisions) == "pending"
+
+
 async def test_undo_on_open_edit_says_nothing_to_undo(jobs_dir, reviewable):
     app = JobsApp(jobs_dir)
     notices = []

@@ -1,4 +1,5 @@
 import shutil
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -81,6 +82,27 @@ def test_apply_remove_with_bare_id_removes_only_that_bullet(resume):
     rem = {"id": "e1", "op": "remove", "path": "acme.b1"}
     assert apply_edit(resume, rem, None) == "acme.b1"
     assert [b["id"] for b in resume.node("acme")["bullets"]] == ["acme.b2"]
+
+
+def test_apply_duplicate_remove_preserves_entry(resume):
+    apply_edit(resume, {"id": "e1", "op": "remove", "path": "acme.b2"}, None)
+    before = deepcopy(resume.data)
+
+    with pytest.raises(KeyError):
+        apply_edit(resume, {"id": "e2", "op": "remove", "path": "acme.b2"}, None)
+
+    assert resume.data == before
+    assert [b["id"] for b in resume.node("acme")["bullets"]] == ["acme.b1"]
+
+
+@pytest.mark.parametrize("path", ["acme.b99", "acme.b2.txt"])
+def test_apply_remove_invalid_target_preserves_resume(resume, path):
+    before = deepcopy(resume.data)
+
+    with pytest.raises(KeyError):
+        apply_edit(resume, {"id": "e1", "op": "remove", "path": path}, None)
+
+    assert resume.data == before
 
 
 def test_set_unknown_field_raises(resume):
