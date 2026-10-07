@@ -8,15 +8,15 @@ from textual.widgets import DataTable, Static
 
 from jobs_tui import tracker
 from jobs_tui.app import CommandBar
-from jobs_tui.paths import tracker_md
+from jobs_tui.paths import AppPaths, tracker_md
 
 
 class TrackerScreen(Screen[Path | None]):
     AUTO_FOCUS = ""
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [Binding("j", "jd", "Job description"), Binding("escape", "back", "Back")]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]TRACKER[/b]  submitted applications · Enter select · p pair (in list: c clears context) · , settings · Esc back", classes="help")
+        yield Static("[b]TRACKER[/b]  submitted applications · Enter select · j job description · p pair (in list: c clears context) · , settings · Esc back", classes="help")
         yield Static("No submitted applications yet. Finalize one with f.", id="tracker-empty")
         yield DataTable(id="tracker-table", cursor_type="row")
         yield CommandBar()
@@ -40,6 +40,12 @@ class TrackerScreen(Screen[Path | None]):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         folder = self.rows[int(event.row_key.value)].folder.rstrip("/")
         self.dismiss(self.app.jobs / folder)
+
+    def action_jd(self) -> None:
+        from jobs_tui.screens.jd import open_jd
+        row = self.query_one("#tracker-table", DataTable).cursor_row
+        if self.rows and 0 <= row < len(self.rows):
+            open_jd(self.app, AppPaths(self.app.jobs / self.rows[row].folder.rstrip("/")))
 
     def action_back(self) -> None:
         self.dismiss(None)

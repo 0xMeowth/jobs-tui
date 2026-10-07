@@ -2863,3 +2863,110 @@ async def test_edit_yaml_unlocks_for_editor_and_adopts(jobs_dir, reviewable, mon
     assert seen["writable"] is True
     assert not os.stat(reviewable.resume_yaml).st_mode & 0o222
     assert guard.outside_change(reviewable) is False
+
+
+def write_jds(two_apps):
+    a, b = two_apps
+    a.jd_md.write_text("# AI Analyst\n\n- Northwind needs **SQL** skills\n")
+    b.jd_md.write_text("# PM\n\n- Fabrikam roadmap ownership\n")
+
+
+def jd_screen_source(app):
+    from textual.widgets import Markdown
+    assert app.screen.__class__.__name__ == "JdScreen"
+    return app.screen.query_one("#jd-text", Markdown).source
+
+
+async def test_applications_page_shows_jd_panel(jobs_dir, two_apps):
+    from textual.widgets import Markdown
+    write_jds(two_apps)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        panel = app.screen.query_one("#app-jd", Markdown)
+        first = panel.source
+        await pilot.press("down")
+        await pilot.pause()
+        assert {first, panel.source} == {two_apps[0].jd_md.read_text(), two_apps[1].jd_md.read_text()}
+
+
+async def test_applications_page_jd_panel_says_when_missing(jobs_dir, two_apps):
+    from textual.widgets import Markdown
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        assert "No JD imported" in app.screen.query_one("#app-jd", Markdown).source
+
+
+async def test_j_opens_jd_viewer_from_list_and_esc_returns(jobs_dir, two_apps):
+    write_jds(two_apps)
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.pause()
+        assert jd_screen_source(app) == app.current.jd_md.read_text()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+
+
+async def test_j_without_jd_notifies(jobs_dir, two_apps):
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        notes = record_notes(app)
+        await pilot.press("j")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "ApplicationsScreen"
+    assert "No JD imported for this application." in notes
+
+
+async def test_j_in_tracker_opens_highlighted_rows_jd(jobs_dir, two_apps):
+    from jobs_tui import tracker
+    write_jds(two_apps)
+    tracker.insert(paths.tracker_md(jobs_dir), tracker.Row("2026-09-26", "Northwind", "AI Analyst", "companies/northwind/ai-analyst/", "", ""))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.pause()
+        assert "Northwind needs" in jd_screen_source(app)
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "TrackerScreen"
+
+
+async def test_j_on_render_page_opens_jd(jobs_dir, two_apps, monkeypatch):
+    from jobs_tui import render
+    write_jds(two_apps)
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.pause()
+        assert jd_screen_source(app) == app.current.jd_md.read_text()
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "RenderScreen"
+
+
+async def test_help_lines_list_j(jobs_dir, two_apps, monkeypatch):
+    from jobs_tui import render
+    from textual.widgets import Static
+    monkeypatch.setattr(render, "render", lambda jobs, p: render.RenderResult(p.resume_pdf, 2))
+    app = JobsApp(jobs_dir)
+    async with app.run_test(size=(120, 40)) as pilot:
+        for key in ("", "t", "r"):
+            await pilot.pause()
+            if key:
+                await pilot.press(key)
+                await pilot.pause()
+            assert "j job description" in str(app.screen.query(".help").first(Static).content), key
+            if key:
+                await pilot.press("escape")

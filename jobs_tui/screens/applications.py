@@ -6,9 +6,9 @@ from pathlib import Path
 from rich.markup import escape
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Label, ListItem, ListView, Static
+from textual.widgets import Label, ListItem, ListView, Markdown, Static
 
 from textual import work
 
@@ -27,15 +27,19 @@ class ApplicationsScreen(Screen):
         Binding("t", "tracker", "Tracker"),
         Binding("y", "edit_yaml", "Edit YAML"),
         Binding("w", "notes", "Notes"),
+        Binding("j", "jd", "Job description"),
         Binding("x", "delete_app", "Delete"),
         Binding("q", "app.quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
-        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter review · b brief · r render · f finalize · y yaml · w notes · x delete · t tracker · p pair (in list: c clears context) · , settings · q quit", classes="help")
+        yield Static("[b]JOB APPLICATIONS[/b]  n new · Enter review · b brief · r render · f finalize · y yaml · w notes · j job description · x delete · t tracker · p pair (in list: c clears context) · , settings · q quit", classes="help")
         with Horizontal(id="body"):
             yield ListView(id="app-list")
-            yield Static("No applications yet. Press n.", id="app-detail")
+            with Vertical(id="app-side"):
+                yield Static("No applications yet. Press n.", id="app-detail")
+                with VerticalScroll(id="app-jd-scroll"):
+                    yield Markdown("", id="app-jd")
         yield CommandBar()
 
     async def on_mount(self) -> None:
@@ -72,6 +76,7 @@ class ApplicationsScreen(Screen):
             self.app.current = None
             self.app.set_pages(None)
             self.query_one("#app-detail", Static).update("No applications yet. Press n.")
+            self.query_one("#app-jd", Markdown).update("")
 
     def show_detail(self, p: AppPaths) -> None:
         self.app.current = p
@@ -90,6 +95,12 @@ class ApplicationsScreen(Screen):
         if p.notes_md.exists():
             lines.append("Notes       saved · w opens")
         self.query_one("#app-detail", Static).update("\n".join(lines))
+        try:
+            jd = p.jd_md.read_text()
+        except OSError:
+            jd = "*No JD imported. Press n to create an application from a posting.*"
+        self.query_one("#app-jd", Markdown).update(jd)
+        self.query_one("#app-jd-scroll", VerticalScroll).scroll_home(animate=False)
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.item is not None and event.item.name:
@@ -174,6 +185,10 @@ class ApplicationsScreen(Screen):
             self.call_later(self.refresh_list)
 
         self.app.push_screen(DeleteScreen(p), done)
+
+    def action_jd(self) -> None:
+        from jobs_tui.screens.jd import open_jd
+        open_jd(self.app, self.app.current)
 
     def action_tracker(self) -> None:
         from jobs_tui.screens.tracker_screen import TrackerScreen

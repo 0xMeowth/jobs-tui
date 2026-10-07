@@ -10,6 +10,11 @@ Screen { layout: vertical; }
 #edit-list .edit-label { width: 1fr; }
 #edit-list .edit-round { width: auto; color: $text-muted; }
 #app-detail, #edit-detail { width: 1fr; border: solid $secondary; padding: 0 1; }
+#app-side { width: 1fr; }
+#app-side #app-detail { height: auto; }
+#app-jd-scroll { height: 1fr; border: solid $secondary; padding: 0 1; }
+#jd-title { background: $panel; padding: 0 1; }
+#jd-scroll { height: 1fr; padding: 0 1; }
 #feedback { height: 5; border: solid $accent; }
 #render-info { padding: 1 2; }
 CommandBar { dock: bottom; height: 3; layout: horizontal; background: $panel; }
