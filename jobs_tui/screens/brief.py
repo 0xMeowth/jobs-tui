@@ -24,12 +24,13 @@ Role: {role}
 
 1. Read jd.md before resume.yaml. List the skills, tools, domain terms and exact phrases the posting uses, ranked by how often and how prominently the posting states them.
 2. For each term, find every bullet in resume.yaml that already demonstrates it. Rewrite that bullet to use the posting's exact phrase. Use a synonym only when the exact phrase would misstate what was done.
-3. Do not add any skill, tool, metric, date, title, employer, credential or outcome that is not already in resume.yaml. When a bullet would be stronger with a number that resume.yaml does not contain, rewrite it without the number and name the missing number in that edit's reason field.
-4. Write every rewritten bullet as one sentence: strong verb, what was done, scale or context, result.
-5. Spell every bullet the way the posting does, British or American, consistently across the whole resume. If the posting gives no clear signal, use British English spelling.
-6. Reorder bullets within an entry so the ones matching this posting come first. Do not reorder entries. Do not change dates, titles or employer names.
-7. Do not remove bullets.
-8. Before writing proposed-edits.json, send one chat message listing the posting requirements that no bullet in resume.yaml can honestly support, and wait for a reply. Then write proposed-edits.json.
+3. Treat a specific tool in resume.yaml as evidence for the broader term the posting uses: Postgres experience may be written as SQL, plainly, not as "SQL (Postgres)". This is rewording, not adding a tool, and point 4 does not forbid it. Never do the reverse: if the posting names a specific tool and resume.yaml only names the general skill, do not claim the specific tool.
+4. Do not add any skill, tool, metric, date, title, employer, credential or outcome that is not already in resume.yaml. When a bullet would be stronger with a number that resume.yaml does not contain, rewrite it without the number and name the missing number in that edit's reason field.
+5. Write every rewritten bullet as one sentence: strong verb, what was done, scale or context, result.
+6. Spell every bullet the way the posting does, British or American, consistently across the whole resume. If the posting gives no clear signal, use British English spelling.
+7. Reorder bullets within an entry so the ones matching this posting come first. Do not reorder entries. Do not change dates, titles or employer names.
+8. Do not remove bullets.
+9. Before writing proposed-edits.json, send one chat message listing the posting requirements that no bullet in resume.yaml can honestly support, and wait for a reply. Then write proposed-edits.json.
 
 ## User focus
 
@@ -71,7 +72,7 @@ class BriefScreen(ModalScreen[str | None]):
         pane = {v: label for label, v in self.app.pane_options}.get(pane_id, escape(pane_id)) if pane_id else None
         with Vertical(id="dialog"):
             yield Label("[b]Review brief[/b]  What should the agent focus on?")
-            yield WordTextArea(saved_brief(self.p), id="brief")
+            yield WordTextArea(saved_brief(self.p), id="brief", placeholder='Optional. Anything the agent should pay extra attention to, e.g. "lead with the fintech work" or "check my wording". Left empty, the request is simply "Optimise this resume for the role."')
             yield Label(f"Agent pane: {pane if pane else 'none. Cancel, press p to pair, then brief again.'}")
             with Horizontal():
                 yield Button("Start review", variant="primary", id="start", disabled=not pane)
