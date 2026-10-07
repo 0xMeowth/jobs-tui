@@ -16,7 +16,7 @@ CommandBar { dock: bottom; height: 3; layout: horizontal; background: $panel; }
 CommandBar #agent-pane { width: 44; }
 CommandBar #agent-state { width: 1fr; padding: 1 1; color: $text-muted; }
 .help { color: $text-muted; padding: 0 1; }
-#job-banner { background: $panel; padding: 0 1; }
+.job-banner { background: $panel; padding: 0 1; }
 ModalScreen { align: center middle; }
 #dialog { width: 80; height: auto; max-height: 90%; border: thick $primary; background: $surface; padding: 1 2; }
 #dialog Button { margin: 1 1 0 0; }

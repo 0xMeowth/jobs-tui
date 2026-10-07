@@ -54,6 +54,15 @@ def highlighted_value(select: Select) -> str | None:
     return None if value is Select.NULL else str(value)
 
 
+def job_banner(p: AppPaths) -> Static | None:
+    from jobs_tui import application
+    try:
+        meta = application.load(p)
+    except (OSError, ValueError, TypeError):
+        return None
+    return Static(f"[b]{escape(meta.company)} · {escape(meta.role)}[/b]", classes="job-banner")
+
+
 class WordTextArea(TextArea):
     """TextArea with word jumps for macOS Option+arrow, which terminals send as alt or ESC-prefixed keys."""
     BINDINGS = [

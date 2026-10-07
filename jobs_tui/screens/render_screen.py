@@ -11,7 +11,7 @@ from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, ListItem, ListView, Static
 
 from jobs_tui import checks, edits as E, guard, render, settings
-from jobs_tui.app import CommandBar
+from jobs_tui.app import CommandBar, job_banner
 from jobs_tui.model import Resume
 from jobs_tui.paths import AppPaths
 
@@ -64,6 +64,8 @@ class RenderScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Static(HELP, classes="help", id="render-help")
+        if banner := job_banner(self.p):
+            yield banner
         yield Static("Rendering…", id="render-info")
         with Vertical(id="check-panel"):
             yield Static("", id="check-head")
